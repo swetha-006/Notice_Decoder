@@ -110,7 +110,7 @@ export function groundModelFlags(
   modelFlags: Array<{
     quote: string;
     category: string;
-    severity: "critical" | "warning" | "info";
+    severity: "critical" | "warning" | "info" | "positive";
     explanation: { en: string; ta: string; hi: string };
   }>,
   fullText: string

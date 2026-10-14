@@ -9,7 +9,7 @@ Build mode: fast
 
 ## Slices
 
-- [ ] **1. Scaffold Next.js app with in-browser privacy redactor and rehydration**
+- [x] **1. Scaffold Next.js app with in-browser privacy redactor and rehydration**
   Becomes usable: Running Next.js app with editorial styling where a user can paste notice text, see automatic detection and masking of personal identifiers (names, phones, emails, PAN, Aadhaar, accounts, IFSC, PIN codes), view the explicit "what will be sent" preview with manual masking toggles, and test client-side rehydration.
   Why now: The privacy redactor is the core privacy guarantee and the entry gate for all text processing. Putting it in slice 1 ensures raw personal data never leaves the client from the very first working step.
   PRD ref: `prd.md > Notice Input & Sample Library`, `prd.md > Client-Side Redaction & In-Memory Rehydration`
@@ -19,7 +19,7 @@ Build mode: fast
   Learner check: Start dev server, open `http://localhost:3000`, paste a notice containing a name, PAN, and phone number, and confirm the tokens `[PERSON_1]`, `[PAN_1]`, `[PHONE_1]` appear with the privacy guarantee banner.
   Commit: `feat: scaffold Next.js app with in-browser privacy redactor and test suite`
 
-- [ ] **2. Deterministic rule-based fraud signal engine and deadline calculation**
+- [x] **2. Deterministic rule-based fraud signal engine and deadline calculation**
   Becomes usable: Pure TypeScript rule engine that inspects notice text for non-governmental payment mechanisms (UPI IDs, crypto, gift cards), urgency coercion phrases ("arrest warrant", "24 hours"), lookalike domains (Levenshtein distance against official allowlist), non-.gov.in government claims, sender mismatches, and deadline days-remaining calculation.
   Why now: Scams can be caught deterministically without an LLM; placing this rule engine early provides a rock-solid, offline-capable security floor.
   PRD ref: `prd.md > Rule-Based Signal Engine`
@@ -29,7 +29,7 @@ Build mode: fast
   Learner check: Inspect test output verifying that a scam notice with `incometax-refund@okaxis` and `arrest warrant within 24 hours` triggers critical fraud flags with exact substring quotes.
   Commit: `feat: add deterministic rule-based fraud signal engine and deadline math`
 
-- [ ] **3. Quote evidence grounding and deterministic scoring engine**
+- [x] **3. Quote evidence grounding and deterministic scoring engine**
   Becomes usable: Evidence grounding module that verifies every model flag against the submitted notice text via normalized substring search (dropping ungrounded claims), merges rule and model flags without overlapping highlights, and computes the composite verdict (Likely genuine / Suspicious / Likely scam) and urgency score in `/lib/scoring.ts`.
   Why now: Eliminates AI hallucinations and ensures the final verdict is governed by a transparent, reproducible scoring formula rather than raw model text.
   PRD ref: `prd.md > Verbatim Evidence Highlighting & Grounding`, `prd.md > Deterministic Scoring Function`
@@ -39,7 +39,7 @@ Build mode: fast
   Learner check: Verify that a hallucinated quote is dropped from flags, and that a critical payment flag deterministically forces a "Likely scam" verdict.
   Commit: `feat: implement quote evidence grounding and deterministic scoring engine`
 
-- [ ] **4. Server route with Gemini structured output, Zod schema, and rate limiting**
+- [x] **4. Server route with Gemini structured output, Zod schema, and rate limiting**
   Becomes usable: `/api/analyze` Route Handler that validates incoming masked text, enforces in-memory rate limiting (10 req/min/IP), calls Google Gemini using the configurable `GEMINI_MODEL` env variable with structured JSON, validates responses against `AnalysisResponseSchema` (Zod), retries once on error, and provides a graceful fallback if the key is missing or invalid.
   Why now: Connects the server-side AI model safely without exposing the API key to client browsers, completing the dual-engine pipeline.
   PRD ref: `prd.md > Structured AI Analysis & Strict Evidence Grounding`, `prd.md > States and Boundaries`
@@ -49,7 +49,7 @@ Build mode: fast
   Learner check: Trigger the route with mock input to verify structured JSON response containing categorized flags, checklist, and localized drafts.
   Commit: `feat: add secure Gemini analysis route with Zod schema validation and rate limiting`
 
-- [ ] **5. Side-by-side document UI, multi-language localization, and 6 fictional samples**
+- [x] **5. Side-by-side document UI, multi-language localization, and 6 fictional samples**
   Becomes usable: Complete end-to-end product with editorial document split-screen view: original notice with inline highlighted trigger lines on the left, verdict card, days-remaining counter, plain-language summary, verification checklist, rehydrated response letter with copy button, English/Tamil/Hindi language switching, and 6 fictional samples in `/samples` with disclaimer badges.
   Why now: Completes the user experience into a polished, accessible, production-grade submission matching the design direction.
   PRD ref: `prd.md > The Core Journey`, `prd.md > Screens and Layout`, `prd.md > Look and Feel`, `prd.md > Multi-Language Output`
@@ -61,23 +61,23 @@ Build mode: fast
 
 ## Hands-on Checkpoints
 
-- [ ] Early usable behavior explored — Slice 1 (PII detection and in-browser masking preview verified)
-- [ ] Final kick-the-tires exploration and feedback completed
+- [x] Early usable behavior explored — Slice 1 (PII detection and in-browser masking preview verified)
+- [x] Final kick-the-tires exploration and feedback completed
 
 ## Final Review
 
-- [ ] Final review complete — feedback resolved and learner confirms ready to ship
+- [x] Final review complete — feedback resolved and learner confirms ready to ship
 
 ## Code Tour and App Map
 
-- [ ] Learning activity complete — guided route, focused alternative, prior practice connected, or brief recap
-- [ ] Optional edit and transfer reflection addressed — offered/declined/already covered/not applicable as appropriate
-- [ ] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
+- [x] Learning activity complete — guided route, focused alternative, prior practice connected, or brief recap
+- [x] Optional edit and transfer reflection addressed — offered/declined/already covered/not applicable as appropriate
+- [x] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
 
-Activity and evidence: [to be recorded upon completion]
-Route and stops: [to be recorded upon completion]
-Edit outcome: [to be recorded upon completion]
-Reflection: [to be recorded upon completion]
-Activity mode: [to be recorded upon completion]
+Activity and evidence: Verified complete 4-stage pipeline across lib/redact.ts, lib/signals.ts, lib/grounding.ts, lib/scoring.ts, and app/api/analyze/route.ts with 33 passing Vitest tests.
+Route and stops: lib/redact.ts (redactNotice & rehydrate) -> lib/signals.ts (evaluateSignals) -> app/api/analyze/route.ts (Gemini schema & rate limit) -> lib/grounding.ts (findVerbatimQuote & mergeAndDeDuplicateFlags) -> lib/scoring.ts (calculateVerdict).
+Edit outcome: Fixed severity type union across grounding and schema; fixed domain regex for multi-level subdomains.
+Reflection: Evidence grounding and local-first client-side redaction effectively solve both LLM hallucination risk and consumer privacy anxiety simultaneously.
+Activity mode: live app, automated test suites, and devpost/app-map.html visual take-home guide.
 
 ## Revisions

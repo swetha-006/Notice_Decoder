@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Notice Check — App Map & Architecture Guide</title>
+  <style>
+    :root {
+      --bg: #FAF9F5;
+      --card: #FFFFFF;
+      --text: #18181B;
+      --muted: #71717A;
+      --border: #E4E4E7;
+      --accent: #0F172A;
+      --accent-subtle: #F1F5F9;
+      --scam: #DC2626;
+      --genuine: #16A34A;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.6;
+    }
+    header {
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 16px;
+      margin-bottom: 28px;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.8rem; font-family: Georgia, serif; }
+    h2 { font-size: 1.25rem; margin: 24px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 4px;
+      background: var(--accent-subtle);
+      color: var(--accent);
+    }
+    .flow-step {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .flow-step h3 { margin: 0 0 6px; font-size: 1rem; color: var(--accent); }
+    .path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85rem; color: #475569; background: #F8FAFC; padding: 2px 6px; border-radius: 4px; border: 1px solid #E2E8F0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); }
+    th { background: #F4F2EC; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="badge">Devpost Learn Take-Home App Map</span>
+    <h1>Notice Check Architecture & Code Map</h1>
+    <p>A reference guide to the core modules, security boundaries, and data paths in the Notice Check codebase.</p>
+  </header>
+
+  <section>
+    <h2>1. The Four-Stage Verification Pipeline</h2>
+
+    <div class="flow-step">
+      <h3>Stage 1: In-Browser PII Redaction & Token Mapping</h3>
+      <p><strong>Code location:</strong> <span class="path">lib/redact.ts</span> · Component: <span class="path">components/RedactionPreview.tsx</span></p>
+      <p>Regex patterns and heuristics identify names, phone numbers, emails, PANs, Aadhaar numbers, bank account numbers, IFSC codes, and addresses. Replaces matches with stable tokens (<span class="path">[PERSON_1]</span>, <span class="path">[PAN_1]</span>). Raw data is retained strictly in browser memory.</p>
+    </div>
+
+    <div class="flow-step">
+      <h3>Stage 2: Deterministic Fraud Signal Engine</h3>
+      <p><strong>Code location:</strong> <span class="path">lib/signals.ts</span> · Allowlist: <span class="path">lib/official-domains.ts</span></p>
+      <p>Runs offline-capable heuristics checking for UPI handles (<span class="path">@okaxis</span>, etc.), crypto addresses, gift card demands, threat language ("arrest warrant", "frozen"), lookalike typosquatting domains (Levenshtein distance &le; 2), and deadline math.</p>
+    </div>
+
+    <div class="flow-step">
+      <h3>Stage 3: Protected Server Route & Structured AI Analysis</h3>
+      <p><strong>Code location:</strong> <span class="path">app/api/analyze/route.ts</span> · Schema: <span class="path">lib/schema.ts</span></p>
+      <p>Receives masked text only. Applies in-memory IP rate limiting (10 req/min/IP). Prompts Google Gemini (model via <span class="path">GEMINI_MODEL</span>) with strict JSON output schema. Retries once on invalid JSON, with a deterministic fallback if the API key is not configured.</p>
+    </div>
+
+    <div class="flow-step">
+      <h3>Stage 4: Verbatim Grounding, Composite Scoring & Local Rehydration</h3>
+      <p><strong>Code location:</strong> <span class="path">lib/grounding.ts</span> &amp; <span class="path">lib/scoring.ts</span> · Viewers: <span class="path">components/DocumentViewer.tsx</span>, <span class="path">components/ResponseDraft.tsx</span></p>
+      <p>Cross-examines model quotes against the original notice. Drops hallucinated flags. Merges non-overlapping character spans. Computes a deterministic final score and verdict. Restores original user PII into the drafted formal reply locally.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Key Files & Tests</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Module</th>
+          <th>Implementation</th>
+          <th>Test Suite</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>PII Redaction & Rehydration</td>
+          <td><span class="path">lib/redact.ts</span></td>
+          <td><span class="path">tests/redact.test.ts</span></td>
+        </tr>
+        <tr>
+          <td>Fraud Signals & Deadlines</td>
+          <td><span class="path">lib/signals.ts</span></td>
+          <td><span class="path">tests/signals.test.ts</span>, <span class="path">tests/deadline.test.ts</span></td>
+        </tr>
+        <tr>
+          <td>Evidence Grounding & Slicing</td>
+          <td><span class="path">lib/grounding.ts</span></td>
+          <td><span class="path">tests/grounding.test.ts</span></td>
+        </tr>
+        <tr>
+          <td>Deterministic Scoring</td>
+          <td><span class="path">lib/scoring.ts</span></td>
+          <td><span class="path">tests/scoring.test.ts</span></td>
+        </tr>
+        <tr>
+          <td>API Validation & Rate Limits</td>
+          <td><span class="path">app/api/analyze/route.ts</span></td>
+          <td><span class="path">tests/api.test.ts</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</body>
+</html>

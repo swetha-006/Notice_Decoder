@@ -3,46 +3,47 @@
 import React, { useState } from "react";
 import { Header } from "@/components/Header";
 import { NoticeInput } from "@/components/NoticeInput";
+import { SampleSelector } from "@/components/SampleSelector";
 import { RedactionPreview } from "@/components/RedactionPreview";
+import { DocumentViewer } from "@/components/DocumentViewer";
+import { VerdictCard } from "@/components/VerdictCard";
+import { SummarySection } from "@/components/SummarySection";
+import { ChecklistSection } from "@/components/ChecklistSection";
+import { ResponseDraft } from "@/components/ResponseDraft";
+import { LanguageSwitcher, Language } from "@/components/LanguageSwitcher";
+import { SampleNotice } from "@/samples";
 import { redactNotice, manualMask, RedactionResult } from "@/lib/redact";
-import { FileText, ShieldAlert } from "lucide-react";
-
-const SAMPLE_DEMO_TEXT = `GOVERNMENT OF INDIA - INCOME TAX DEPARTMENT
-NOTICE UNDER SECTION 143(1) OF INCOME TAX ACT, 1961
-
-Date: 14/10/2026
-Notice Ref: ITD/DEL/2026/894201
-
-To,
-Shri Rajesh Kumar Sharma
-PAN: ABCDE1234F
-Address: Flat 402, Shanti Vihar, MG Road, New Delhi, PIN Code: 110001
-Mobile: +91 9876543210
-Email: rajesh.sharma99@gmail.com
-
-SUB: DEMAND NOTICE FOR ASSESSMENT YEAR 2025-26
-
-Dear Rajesh Kumar Sharma,
-This is an urgent communication from the Income Tax Department. Outstanding arrears of Rs. 48,500/- are pending against your PAN ABCDE1234F.
-
-You are hereby commanded to settle this immediately within 24 hours. Failure to comply will result in an immediate warrant of arrest and freezing of your Bank Account No. 987654321098 at SBI (IFSC: SBIN0001234).
-
-To avoid legal prosecution, deposit the amount to the official department settlement gateway:
-UPI ID: incometax-refund@okaxis
-Verification Portal: http://incometax-gov.in/quick-pay
-
-Signed,
-Tax Recovery Officer
-New Delhi
-`;
+import { evaluateSignals } from "@/lib/signals";
+import { groundModelFlags, mergeAndDeDuplicateFlags, GroundedFlag } from "@/lib/grounding";
+import { calculateVerdict, ScoringResult } from "@/lib/scoring";
+import { AnalysisResponse } from "@/lib/schema";
+import { ArrowLeft, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
 
 export default function Home() {
-  const [noticeText, setNoticeText] = useState("");
-  const [redactionResult, setRedactionResult] = useState<RedactionResult | null>(null);
   const [currentStep, setCurrentStep] = useState<"input" | "redaction" | "result">("input");
+  const [noticeText, setNoticeText] = useState("");
+  const [selectedSampleId, setSelectedSampleId] = useState<string | undefined>();
+  const [redactionResult, setRedactionResult] = useState<RedactionResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [currentLang, setCurrentLang] = useState<Language>("en");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Analysis Result State
+  const [groundedFlags, setGroundedFlags] = useState<GroundedFlag[]>([]);
+  const [scoringResult, setScoringResult] = useState<ScoringResult | null>(null);
+  const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
+  const [daysRemaining, setDaysRemaining] = useState<number | undefined>();
+  const [isExpired, setIsExpired] = useState<boolean | undefined>();
+
+  const handleSelectSample = (sample: SampleNotice) => {
+    setNoticeText(sample.content);
+    setSelectedSampleId(sample.id);
+    setErrorMessage(null);
+  };
 
   const handleMaskReview = () => {
     if (!noticeText.trim()) return;
+    setErrorMessage(null);
     const result = redactNotice(noticeText);
     setRedactionResult(result);
     setCurrentStep("redaction");
@@ -62,63 +63,112 @@ export default function Home() {
     });
   };
 
-  const handleConfirmAnalyze = () => {
-    // In Slice 1, confirmation transitions to analysis step
-    alert(
-      "Personal data masked successfully! Original details remain strictly in your browser.\n\nProceeding to Slice 2: Fraud Signal Engine."
-    );
+  const handleConfirmAnalyze = async () => {
+    if (!redactionResult) return;
+    setIsAnalyzing(true);
+    setErrorMessage(null);
+
+    try {
+      // 1. Evaluate deterministic signals locally
+      const ruleSignals = evaluateSignals(noticeText);
+      setDaysRemaining(ruleSignals.deadlineInfo?.daysRemaining);
+      setIsExpired(ruleSignals.deadlineInfo?.isExpired);
+
+      // 2. Call server route for structured model analysis
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maskedText: redactionResult.redactedText }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server responded with status ${res.status}`);
+      }
+
+      const modelData: AnalysisResponse = await res.json();
+      setAnalysisResponse(modelData);
+
+      // 3. Ground model flags: discard any flag whose quote cannot be found verbatim
+      const verifiedModelFlags = groundModelFlags(modelData.flags, noticeText);
+
+      // 4. Merge rule findings with verified model flags & de-duplicate ranges
+      const merged = mergeAndDeDuplicateFlags(
+        verifiedModelFlags,
+        ruleSignals.findings,
+        noticeText
+      );
+      setGroundedFlags(merged);
+
+      // 5. Compute deterministic composite score & verdict
+      const scoreRes = calculateVerdict({
+        ruleSignals,
+        groundedFlags: merged,
+        modelVerdict: modelData.verdict,
+        modelConfidence: modelData.confidenceScore,
+      });
+      setScoringResult(scoreRes);
+
+      setCurrentStep("result");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to analyze notice";
+      setErrorMessage(msg);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleReset = () => {
+    setCurrentStep("input");
+    setNoticeText("");
+    setSelectedSampleId(undefined);
+    setRedactionResult(null);
+    setAnalysisResponse(null);
+    setScoringResult(null);
+    setGroundedFlags([]);
+    setErrorMessage(null);
   };
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
       <Header />
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-        {/* Intro banner */}
-        <div className="mb-8">
-          <div className="flex flex-col gap-2 border-l-2 border-accent pl-4">
-            <h2 className="font-serif text-2xl font-bold text-ink sm:text-3xl">
-              Inspect Official Notice
-            </h2>
-            <p className="text-sm text-ink-secondary">
-              Paste any tax, bank, customs, or e-challan notice. All personal identifiers are masked locally on your device before analysis.
-            </p>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        {errorMessage && (
+          <div className="mb-6 rounded-md border border-scam-border bg-scam-bg p-4 text-xs text-scam-text">
+            <div className="flex items-center gap-2 font-bold">
+              <ShieldAlert className="h-4 w-4 text-scam" />
+              <span>Analysis Error</span>
+            </div>
+            <p className="mt-1">{errorMessage}</p>
           </div>
-        </div>
+        )}
 
-        {/* Step 1: Input view */}
+        {/* STEP 1: INPUT & SAMPLE SELECTION */}
         {currentStep === "input" && (
           <div className="space-y-6">
-            {/* Quick Demo Pre-fill */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-canvas-subtle p-3.5 text-xs">
-              <div className="flex items-center gap-2 text-ink-secondary">
-                <FileText className="h-4 w-4 text-accent" />
-                <span>Want to test immediately? Load a sample notice:</span>
-              </div>
-              <button
-                type="button"
-                id="load-sample-btn"
-                onClick={() => setNoticeText(SAMPLE_DEMO_TEXT)}
-                className="inline-flex items-center gap-1.5 rounded border border-border bg-canvas-card px-3 py-1 font-medium text-ink shadow-sm hover:bg-canvas transition"
-              >
-                <ShieldAlert className="h-3.5 w-3.5 text-scam" />
-                <span>Load Sample Tax Scam Notice</span>
-              </button>
-            </div>
+            <SampleSelector
+              onSelectSample={handleSelectSample}
+              selectedSampleId={selectedSampleId}
+            />
 
             <NoticeInput
               value={noticeText}
-              onChange={setNoticeText}
+              onChange={(val) => {
+                setNoticeText(val);
+                setSelectedSampleId(undefined);
+              }}
               onSubmit={handleMaskReview}
               onClear={() => {
                 setNoticeText("");
-                setRedactionResult(null);
+                setSelectedSampleId(undefined);
               }}
+              isLoading={isAnalyzing}
             />
           </div>
         )}
 
-        {/* Step 2: Redaction Preview */}
+        {/* STEP 2: REDACTION PREVIEW */}
         {currentStep === "redaction" && redactionResult && (
           <div className="space-y-6">
             <RedactionPreview
@@ -127,7 +177,74 @@ export default function Home() {
               onConfirm={handleConfirmAnalyze}
               onBack={() => setCurrentStep("input")}
               onManualMask={handleManualMask}
+              isAnalyzing={isAnalyzing}
             />
+          </div>
+        )}
+
+        {/* STEP 3: RESULT SCREEN (SIDE-BY-SIDE DOCUMENT VIEW) */}
+        {currentStep === "result" && scoringResult && analysisResponse && redactionResult && (
+          <div className="space-y-6">
+            {/* Top Toolbar: Language Switcher and Reset */}
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-canvas-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex items-center gap-1.5 self-start text-xs font-semibold text-ink hover:text-ink-secondary sm:self-auto"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span>Check Another Notice</span>
+              </button>
+
+              <div className="flex items-center gap-3">
+                <LanguageSwitcher
+                  currentLang={currentLang}
+                  onLanguageChange={setCurrentLang}
+                />
+              </div>
+            </div>
+
+            {/* Verdict Card */}
+            <VerdictCard
+              verdict={scoringResult.verdict}
+              confidenceScore={scoringResult.confidenceScore}
+              urgencyLevel={scoringResult.urgencyLevel}
+              oneSentenceReason={scoringResult.oneSentenceReason}
+              daysRemaining={daysRemaining}
+              isExpired={isExpired}
+              currentLang={currentLang}
+            />
+
+            {/* Split Screen Container: Document on Left, Actions on Right */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+              {/* Left Column: Original Letter with Grounded Highlights (5 cols) */}
+              <div className="lg:col-span-5 h-full">
+                <DocumentViewer
+                  originalText={noticeText}
+                  flags={groundedFlags}
+                  currentLang={currentLang}
+                />
+              </div>
+
+              {/* Right Column: Plain Summary, Checklist, and Drafted Reply (7 cols) */}
+              <div className="lg:col-span-7 space-y-6">
+                <SummarySection
+                  summary={analysisResponse.summary}
+                  currentLang={currentLang}
+                />
+
+                <ChecklistSection
+                  items={analysisResponse.checklist}
+                  currentLang={currentLang}
+                />
+
+                <ResponseDraft
+                  draftReply={analysisResponse.draftReply}
+                  tokenMap={redactionResult.tokenMap}
+                  currentLang={currentLang}
+                />
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -135,10 +252,10 @@ export default function Home() {
       <footer className="border-t border-border bg-canvas-card py-6 text-center text-xs text-ink-muted">
         <div className="mx-auto max-w-7xl px-4">
           <p>
-            Notice Check · Privacy-First Official Communication Verification · Built for Devpost Build With AI Hackathon
+            Notice Check · Privacy-First Administrative Verification Engine · Devpost Build With AI: Basics
           </p>
           <p className="mt-1 text-[11px] text-ink-muted">
-            All personal information is redacted on-device. No notice text or personal records are stored.
+            All personal information is redacted on-device. No notice text or personal records are ever logged or stored.
           </p>
         </div>
       </footer>
