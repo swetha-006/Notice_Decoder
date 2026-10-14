@@ -79,3 +79,38 @@ body {
   border-radius: 3px;
   font-weight: 600;
 }
+
+/* High-End Clean Print Stylesheet for PDF Export */
+@media print {
+  body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+  }
+
+  header,
+  footer,
+  .no-print,
+  button {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .shadow-sm,
+  .shadow-xs,
+  .shadow-md {
+    box-shadow: none !important;
+  }
+
+  .border,
+  .border-2 {
+    border-color: #CCCCCC !important;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+}
