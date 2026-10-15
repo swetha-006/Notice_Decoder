@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { checkRateLimit } from "@/lib/rate-limit";
+import {
+  checkRateLimit,
+  getRateLimitIdentifier,
+  rateLimitSettingsFromEnv,
+} from "@/lib/rate-limit";
 import { AnalyzeRequestSchema, AnalysisResponseSchema } from "@/lib/schema";
 import { NextRequest } from "next/server";
 
@@ -93,6 +97,37 @@ describe("API Route Validation & Rate Limiting (lib/rate-limit.ts & lib/schema.t
     expect(denied.resetInSeconds).toBeGreaterThan(0);
   });
 
+  it("prefers platform client IP headers and falls back to user-agent", () => {
+    const headers = new Headers({
+      "x-vercel-forwarded-for": "203.0.113.8, 10.0.0.1",
+      "x-real-ip": "203.0.113.9",
+      "x-forwarded-for": "203.0.113.10",
+      "user-agent": "test-agent",
+    });
+    expect(getRateLimitIdentifier(headers)).toBe("ip:203.0.113.8");
+    expect(getRateLimitIdentifier(new Headers({ "x-real-ip": "198.51.100.4" }))).toBe(
+      "ip:198.51.100.4"
+    );
+    expect(getRateLimitIdentifier(new Headers({ "user-agent": "test-agent" }))).toBe(
+      "user-agent:test-agent"
+    );
+  });
+
+  it("reads positive rate limit settings from environment and ignores invalid values", () => {
+    expect(
+      rateLimitSettingsFromEnv({
+        RATE_LIMIT_MAX_REQUESTS: "4",
+        RATE_LIMIT_WINDOW_MS: "2500",
+      })
+    ).toEqual({ limit: 4, windowMs: 2500 });
+    expect(
+      rateLimitSettingsFromEnv({
+        RATE_LIMIT_MAX_REQUESTS: "0",
+        RATE_LIMIT_WINDOW_MS: "invalid",
+      })
+    ).toEqual({ limit: 10, windowMs: 60_000 });
+  });
+
   it("validates request length with AnalyzeRequestSchema", () => {
     // Too short (< 10 chars)
     const shortRes = AnalyzeRequestSchema.safeParse({ maskedText: "Short" });
@@ -151,6 +186,12 @@ describe("API Route Validation & Rate Limiting (lib/rate-limit.ts & lib/schema.t
 
     const res = AnalysisResponseSchema.safeParse(validSample);
     expect(res.success).toBe(true);
+    expect(
+      AnalysisResponseSchema.safeParse({
+        ...validSample,
+        oneSentenceReason: { en: "Verify first.", hi: "पहले पुष्टि करें।" },
+      }).success
+    ).toBe(false);
   });
 
   it("returns structured model output with source=model", async () => {
@@ -292,7 +333,7 @@ describe("API Route Validation & Rate Limiting (lib/rate-limit.ts & lib/schema.t
     const ip = "198.51.100.91";
     const { checkRateLimit: routeRateLimit } = await import("@/lib/rate-limit");
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      routeRateLimit(ip, 10, 60 * 1000);
+      routeRateLimit(`ip:${ip}`, 10, 60 * 1000);
     }
 
     const response = await postAnalyze("Please verify this notice.", ip);

@@ -24,6 +24,33 @@ describe("rules-only sample regression suite", () => {
     expect(result.verdict).toBe(EXPECTED[sample.id]);
   });
 
+  it("generates sample issue and due dates relative to the current date", () => {
+    const localDate = (value: string) => {
+      const [day, month, year] = value.split("/").map(Number);
+      return new Date(year, month - 1, day);
+    };
+    const dateOffset = (days: number) => {
+      const date = new Date();
+      date.setDate(date.getDate() + days);
+      return `${String(date.getDate()).padStart(2, "0")}/${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}/${date.getFullYear()}`;
+    };
+
+    for (const sample of SAMPLES) {
+      const issue = sample.content.match(
+        /(?:Date of Issue|Communication Date|Issue Date|Notice Date): (\d{2}\/\d{2}\/\d{4})/
+      );
+      expect(issue?.[1]).toBe(dateOffset(sample.type === "genuine" ? -2 : -1));
+    }
+
+    for (const id of ["tax-genuine-143", "bank-genuine"]) {
+      const sample = SAMPLES.find((item) => item.id === id);
+      const dueDate = sample?.content.match(/\bby (\d{2}\/\d{2}\/\d{4})/);
+      expect(dueDate?.[1]).toBe(dateOffset(14));
+    }
+  });
+
   it("keeps the real-government-domain decoy as scam when it threatens arrest and demands a bank transfer", () => {
     const notice = "Government of India Income Tax Department. Verify at https://incometax.gov.in. Pay the penalty by transfer to my personal bank account within 24 hours or an arrest warrant will be issued.";
     const signals = evaluateSignals(notice);

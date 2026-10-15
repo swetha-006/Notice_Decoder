@@ -21,7 +21,9 @@ Source: `scope.md > The Unique Kernel`.
      - Urgency badge (Red / Amber / Green) with a calculated **Days Remaining** countdown.
      - Plain-language summary answering: What is this? What does it demand? What happens if ignored?
      - Step-by-step "What To Do Next" checklist, prominently featuring official verification pathways (e.g. verifying DIN on `incometax.gov.in`).
-     - Ready-to-send drafted response or clarification request, with the user's original names and numbers **locally rehydrated** from browser memory.
+     - A likely-scam verdict shows multilingual safety guidance and no reply draft. A suspicious verdict shows a neutral request to verify the reference and applicable action/date, without asserting compliance or disputing a debt. A likely-genuine verdict may show the model's polite draft.
+     - If the model verdict differs from the final verdict, replace model-written advice with guidance for the final verdict and show “Verify before acting.”
+     - Draft tokens are locally rehydrated from browser memory.
      - Language selector toggle (English, Tamil, Hindi) that re-renders all summaries, checklists, and drafts in the chosen language.
 
 ## Screens and Layout
@@ -62,18 +64,18 @@ Source: `scope.md > The Unique Kernel`.
   4. `courier-customs-scam.txt`: Fake FedEx/India Post customs clearance demanding courier fee payment to a personal account.
   5. `echallan-scam.txt`: Fake traffic e-challan notice sent via mobile SMS with a shortened `bit.ly` or lookalike link `echallan-parivahan.in`.
   6. `bank-genuine-statement.txt`: Genuine bank annual statement notice asking user to log in only at the official netbanking portal.
-- All sample letters display a permanent disclaimer banner: *"Sample letter — fictional"*.
+- All sample letters display a permanent disclaimer banner: *"Sample letter — fictional"*. Issue dates are generated relative to the current date; genuine samples are issued two days ago and show a due date 14 days ahead.
 
 ### Client-Side Redaction & In-Memory Rehydration
 - **Detection Scope**:
-  - Full Names (heuristic based on salutations like "Dear [Name]", "To, [Name]", "Shri/Smt [Name]").
+  - Names (heuristic after salutations, name labels, and common Tamil/Devanagari honorifics; may include a one-word name).
   - Email addresses (`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`).
-  - Phone numbers (Indian 10-digit mobile `+91`, `0`, spaces/hyphens; international formats).
+  - Phone numbers (Indian grouped or ungrouped mobile numbers, common `+91`/`0` prefixes, grouped STD landlines, and a conservative international pattern).
   - Indian PAN numbers (`[A-Z]{5}[0-9]{4}[A-Z]{1}`).
-  - Aadhaar-style 12-digit numbers (`\d{4}\s?\d{4}\s?\d{4}`).
-  - Bank Account Numbers & IFSC codes (`[A-Z]{4}0[A-Z0-9]{6}`).
+  - Aadhaar-style numbers (grouped 4-4-4 numbers, or 12 digits when explicitly labeled Aadhaar).
+  - Bank account numbers (only when an account label supplies context; grouped values are supported) and IFSC codes (`[A-Z]{4}0[A-Z0-9]{6}`).
   - Indian Postal PIN codes (`\b[1-9][0-9]{5}\b`).
-  - Street addresses and house numbers (heuristics).
+  - Labeled address lines and PIN codes following postal labels (heuristics). DINs, section references, amounts, dates, and unlabelled reference numbers are not treated as Aadhaar or account numbers.
 - **Token Replacement**: Replaces each matched substring with a stable token: `[PERSON_1]`, `[PHONE_1]`, `[EMAIL_1]`, `[PAN_1]`, `[ACCOUNT_1]`, `[ADDRESS_1]`.
 - **In-Memory Token Map**: Stored strictly in browser state (never transmitted, never persisted in localStorage or cookies).
 - **Manual Redaction**: Users can click or highlight any unmasked word to convert it into a `[REDACTED_N]` token before sending.
@@ -89,7 +91,7 @@ Pure TypeScript module running deterministically:
    - Lookalike / near-miss detection: Levenshtein distance check against allowlisted domains (e.g. `incometax-gov.in`, `incometaxindiaefiling.org`, `parivahan-gov.in`).
    - Non-.gov.in validation: Flags notices claiming to be Government of India departments but linking to `.com`, `.co.in`, `.org`, `.xyz`, or raw IP addresses.
 4. **Sender Mismatch Signals**: Flags official notices originating from public free email services (`@gmail.com`, `@yahoo.com`, `@outlook.com`) or personal mobile numbers.
-5. **Deadline Extraction & Math**: Extracts stated dates/deadlines and computes days remaining relative to current date (e.g., "3 days remaining", "Expired yesterday").
+5. **Deadline Extraction & Math**: Recognizes dates only when attached to an explicit due phrase (`on or before`, `by`, `last date`, `due date`, `pay by`, `respond by`) or a relative period (`within N days/hours`). Supports `DD/MM/YYYY`, `DD-MM-YYYY`, and named dates with ordinal days. Relative periods are calculated from an explicit issue date when present; otherwise the phrase is shown without a countdown. Invalid calendar dates and incidental dates are ignored. Past deadlines say “Deadline passed N days ago.”
 
 ### Structured AI Analysis & Strict Evidence Grounding
 - Server route calls Gemini with structured output schema (Zod).
@@ -128,7 +130,7 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 - **Analyzing State**: Unobtrusive progress indication ("Checking official domain registries...", "Running signal heuristics...", "Grounding evidence...").
 - **Completed Result State**: Split view with highlighted text and action checklist.
 - **Retry / Recovery State**: If Gemini API returns invalid JSON or schema errors, the server retries once; if it fails again, returns a graceful fallback combining the full rule-based signal results.
-- **Rate Limit State**: In-memory rate limiting (10 requests per IP per minute) returns HTTP 429 with a clear "Please wait a moment" message.
+- **Rate Limit State**: Configurable in-memory per-instance rate limiting defaults to 10 requests per 60 seconds. It identifies clients from platform/client IP headers, falling back to user-agent; deployments with multiple instances do not share this state.
 - **Session Boundary**: Completely ephemeral. Reloading clears all data; no local storage of notice contents.
 
 ## Product Decisions

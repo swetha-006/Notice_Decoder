@@ -28,7 +28,7 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 4. **Signal Engine & Server Evaluation**:
    - Client executes `evaluateSignals(maskedText)` from `/lib/signals.ts`.
    - Client posts `{ maskedText }` to `/api/analyze`.
-   - `/api/analyze` verifies rate limits (in-memory token bucket), checks length `<= 10,000`, invokes Gemini with structured JSON, validates against `AnalysisResponseSchema` (Zod), retrying once on JSON/schema mismatch.
+   - `/api/analyze` verifies the configurable per-instance in-memory rate limit, checks length `<= 10,000`, invokes Gemini with structured JSON, validates against `AnalysisResponseSchema` (Zod), retrying once on JSON/schema mismatch.
    - Ref: `prd.md > Dual-Engine Analysis: Rule Engine & Grounded Model Analysis`.
 5. **Grounding & Scoring**:
    - `groundFlags(modelFlags, originalMaskedText)` verifies verbatim substrings in `/lib/grounding.ts`.
@@ -37,7 +37,7 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
    - Ref: `prd.md > Verbatim Evidence Highlighting & Grounding` & `prd.md > Deterministic Scoring Function`.
 6. **Side-by-Side Presentation**:
    - `DocumentViewer` renders original text with highlighted spans.
-   - `VerdictCard`, `SummarySection`, `ChecklistSection`, and `ResponseDraft` render right-hand panel.
+   - `VerdictCard` and `VerdictAdvice` render the right-hand panel. Scam verdicts use multilingual safety guidance without a reply draft; suspicious verdicts use a neutral verification reply; model/final-verdict disagreement uses final-verdict guidance and requests verification.
    - `rehydrate(draftText, tokenMap)` injects original personal identifiers back into the draft.
    - `LanguageSwitcher` toggles translations (English, Tamil, Hindi).
    - Ref: `prd.md > Side-by-Side Document Review` & `prd.md > Multi-Language Output`.
@@ -137,8 +137,12 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 - Implements: `prd.md > Actionable Verification Checklist & Official Portals`.
 
 ### `ResponseDraft`
-- What it does: Renders a formal drafted response letter or clarification request. Re-hydrates `[PERSON_1]` and other tokens with original local values. Includes a one-click "Copy to Clipboard" button.
+- What it does: Renders the approved neutral or model-generated response for non-scam verdicts. Re-hydrates tokens with original local values. Scam verdicts do not show a reply draft.
 - Implements: `prd.md > Localized Response Draft with Client Rehydration`.
+
+### `VerdictAdvice`
+- What it does: Ensures the displayed summary, checklist, and any reply are consistent with the final verdict. Provides multilingual scam safety guidance and a neutral verification response for suspicious notices.
+- Implements: `prd.md > Side-by-Side Document Review`.
 
 ### `LanguageSwitcher`
 - What it does: Allows toggling output language between English (`en`), Tamil (`ta`), and Hindi (`hi`). Dynamically updates the content of `VerdictCard`, `SummarySection`, `ChecklistSection`, and `ResponseDraft`.
@@ -186,6 +190,7 @@ export interface SignalEngineResult {
   hasValidGovDomain: boolean;
 }
 ```
+- `lib/deadline.ts` recognizes explicit deadline phrases and valid numeric or named calendar dates. Relative day/hour periods are anchored to a labeled issue date; without one, the UI shows the phrase without a countdown.
 
 ### Gemini Structured Response Schema (`/lib/schema.ts`)
 ```typescript
@@ -331,7 +336,8 @@ Notice_Decoder/
   - Cost: Free tier ($0.00).
   - Documentation: [ai.google.dev/pricing](https://ai.google.dev/pricing)
 - **Local In-Memory Rate Limiter**:
-  - Restricts clients to 10 requests per minute per IP to protect the free tier Gemini API key from exhaustion. Zero external infrastructure.
+  - Defaults to 10 requests per 60 seconds. `RATE_LIMIT_MAX_REQUESTS` and `RATE_LIMIT_WINDOW_MS` configure the thresholds.
+  - Prefers `x-vercel-forwarded-for`, `x-real-ip`, then `x-forwarded-for`; uses user-agent when no IP header is available. State is per server instance and is not a distributed abuse-prevention control.
 
 ## Important Failure Modes
 1. **Gemini API Key Missing or Invalid**:

@@ -33,6 +33,18 @@ describe("In-Browser Redaction Module (lib/redact.ts)", () => {
     expect(result.tokenMap["[EMAIL_1]"]).toBe("rajesh.officer@gmail.com");
   });
 
+  it("masks grouped mobile and STD landline numbers", () => {
+    const result = redactNotice(
+      "Call +91 98765 43210 or the Delhi office at 011-2345 6789."
+    );
+
+    expect(result.redactedText).not.toContain("98765 43210");
+    expect(result.redactedText).not.toContain("011-2345 6789");
+    expect(result.counts.PHONE).toBe(2);
+    expect(Object.values(result.tokenMap)).toContain("+91 98765 43210");
+    expect(Object.values(result.tokenMap)).toContain("011-2345 6789");
+  });
+
   it("masks names following formal salutations", () => {
     const notice = "Dear Vikramaditya Rao,\nThis is an urgent notice regarding your account.";
     const result = redactNotice(notice);
@@ -40,6 +52,30 @@ describe("In-Browser Redaction Module (lib/redact.ts)", () => {
     expect(result.redactedText).toContain("Dear [PERSON_1]");
     expect(result.redactedText).not.toContain("Vikramaditya Rao");
     expect(result.tokenMap["[PERSON_1]"]).toBe("Vikramaditya Rao");
+  });
+
+  it("masks one-word and Tamil/Devanagari names after salutations and labels", () => {
+    const result = redactNotice(
+      "Dear Ravi,\nName of Assessee: ரமேஷ் குமார்\nश्रीमान अमित शर्मा\nName: Alice"
+    );
+
+    expect(result.redactedText).not.toContain("Ravi");
+    expect(result.redactedText).not.toContain("ரமேஷ் குமார்");
+    expect(result.redactedText).not.toContain("अमित शर्मा");
+    expect(result.redactedText).not.toContain("Alice");
+    expect(result.counts.PERSON).toBe(4);
+  });
+
+  it("does not mistake generic salutations for personal names", () => {
+    expect(redactNotice("Dear Sir,\nPlease review the notice.").redactedText).toBe(
+      "Dear Sir,\nPlease review the notice."
+    );
+  });
+
+  it("masks a single-line address even when it has no comma-separated parts", () => {
+    const result = redactNotice("Residential Address: 42 Lake Road");
+    expect(result.redactedText).toBe("Residential Address: [ADDRESS_1]");
+    expect(result.tokenMap["[ADDRESS_1]"]).toBe("42 Lake Road");
   });
 
   it("masks bank account numbers and IFSC codes", () => {
@@ -61,6 +97,30 @@ describe("In-Browser Redaction Module (lib/redact.ts)", () => {
     );
   });
 
+  it("masks grouped account numbers only when an account label supplies context", () => {
+    const result = redactNotice(
+      "Account No: 1234 5678 9012; reference 1234 5678 9012."
+    );
+    expect(result.redactedText).toBe(
+      "Account No: [ACCOUNT_1]; reference 1234 5678 9012."
+    );
+  });
+
+  it("requires context for ungrouped Aadhaar values and preserves unrelated identifiers", () => {
+    const notice =
+      "DIN: 202600123456; Reference No: 123456789012; Reference: 1234 5678 9012; Section 143(1); Amount Rs 45,000; Issued on 12/02/2026; Aadhaar: 987654321098.";
+    const result = redactNotice(notice);
+
+    expect(result.redactedText).toContain("DIN: 202600123456");
+    expect(result.redactedText).toContain("Reference No: 123456789012");
+    expect(result.redactedText).toContain("Reference: 1234 5678 9012");
+    expect(result.redactedText).toContain("Section 143(1)");
+    expect(result.redactedText).toContain("Amount Rs 45,000");
+    expect(result.redactedText).toContain("Issued on 12/02/2026");
+    expect(result.redactedText).toContain("Aadhaar: [AADHAAR_1]");
+    expect(result.tokenMap["[AADHAAR_1]"]).toBe("987654321098");
+  });
+
   it("masks Indian postal PIN codes following keyword", () => {
     const notice = "Registered address in Chennai, PIN Code: 600001.";
     const result = redactNotice(notice);
@@ -75,6 +135,9 @@ describe("In-Browser Redaction Module (lib/redact.ts)", () => {
     const result = redactNotice(notice);
 
     // Both occurrences of Ramesh Kumar should map to [PERSON_1]
+    expect(result.redactedText).toBe(
+      "Dear [PERSON_1]. We remind you, [PERSON_1], that PAN [PAN_1] is flagged."
+    );
     const matches = result.redactedText.match(/\[PERSON_1\]/g);
     expect(matches?.length).toBe(2);
     expect(result.counts.PERSON).toBe(1);

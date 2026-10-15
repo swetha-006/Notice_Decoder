@@ -41,7 +41,7 @@ flowchart TD
     end
 
     subgraph ServerRoute ["Next.js App Router Server (/api/analyze)"]
-        PrivacyGate -.->|"Masked Text Only ([PERSON_1], [PAN_1])"| RateLimiter["In-Memory Rate Limiter (10 req/min/IP)"]
+        PrivacyGate -.->|"Masked Text Only ([PERSON_1], [PAN_1])"| RateLimiter["Per-instance in-memory limiter (configurable)"]
         RateLimiter --> ZodIn["Zod Request Validator (<= 10k chars)"]
         ZodIn --> GeminiAPI["Google Gemini API (Free Tier: gemini-3.8-flash)"]
         GeminiAPI --> ZodOut["Zod Structured Schema Validator + Auto-Retry"]
@@ -101,8 +101,12 @@ Add your free Google Gemini API key:
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-3.8-flash
 GEMINI_MODEL_FALLBACKS=
+RATE_LIMIT_MAX_REQUESTS=10
+RATE_LIMIT_WINDOW_MS=60000
 ```
 *(Note: If `GEMINI_API_KEY` is omitted, the app automatically runs in offline rule-based mode).*
+
+The rate limiter defaults to 10 requests per 60 seconds. Its in-memory state is per server instance, so it is not a distributed production abuse-control system. Set `RATE_LIMIT_MAX_REQUESTS` and `RATE_LIMIT_WINDOW_MS` to positive integers to change the limit.
 
 ### Check Gemini before a demo
 With `GEMINI_API_KEY` configured in `.env.local`, run:

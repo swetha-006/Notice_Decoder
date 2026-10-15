@@ -7,9 +7,7 @@ import { SampleSelector } from "@/components/SampleSelector";
 import { RedactionPreview } from "@/components/RedactionPreview";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { VerdictCard } from "@/components/VerdictCard";
-import { SummarySection } from "@/components/SummarySection";
-import { ChecklistSection } from "@/components/ChecklistSection";
-import { ResponseDraft } from "@/components/ResponseDraft";
+import { VerdictAdvice } from "@/components/VerdictAdvice";
 import { LanguageSwitcher, Language } from "@/components/LanguageSwitcher";
 import { SampleNotice } from "@/samples";
 import { redactNotice, manualMask, RedactionResult } from "@/lib/redact";
@@ -237,7 +235,10 @@ export default function Home() {
             <VerdictCard
               verdict={scoringResult.verdict}
               confidenceLevel={scoringResult.confidenceLevel}
-              verifyBeforeActing={scoringResult.verifyBeforeActing}
+              verifyBeforeActing={
+                scoringResult.verifyBeforeActing ||
+                analysisResponse.verdict !== scoringResult.verdict
+              }
               urgencyLevel={scoringResult.urgencyLevel}
               oneSentenceReason={scoringResult.oneSentenceReason}
               daysRemaining={daysRemaining}
@@ -258,14 +259,12 @@ export default function Home() {
 
               {/* Right Column: Plain Summary, Checklist, and Drafted Reply (7 cols) */}
               <div className="lg:col-span-7 space-y-6">
-                {analysisResponse.source === "model" ? (
-                  <SummarySection summary={analysisResponse.summary} currentLang={currentLang} />
-                ) : (
-                  <section className="rounded-lg border border-border bg-canvas-card p-5">
-                    <h2 className="font-serif text-lg font-semibold">General guidance</h2>
-                    <p className="mt-2 text-sm">Do not use links or contact details in the notice. Find the official website independently and verify the reference with the issuing organization.</p>
-                  </section>
-                )}
+                <VerdictAdvice
+                  analysisResponse={analysisResponse}
+                  verdict={scoringResult.verdict}
+                  currentLang={currentLang}
+                  tokenMap={redactionResult.tokenMap}
+                />
 
                 <section className="rounded-lg border border-border bg-canvas-card p-5" aria-labelledby="why-verdict-title">
                   <h2 id="why-verdict-title" className="font-serif text-lg font-semibold">Why this verdict</h2>
@@ -274,14 +273,6 @@ export default function Home() {
                   </ul>
                 </section>
 
-                <ChecklistSection
-                  items={analysisResponse.checklist}
-                  currentLang={currentLang}
-                />
-
-                {analysisResponse.source === "model" && (
-                  <ResponseDraft draftReply={analysisResponse.draftReply} tokenMap={redactionResult.tokenMap} currentLang={currentLang} />
-                )}
               </div>
             </div>
           </div>

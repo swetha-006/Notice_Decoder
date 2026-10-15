@@ -7,6 +7,18 @@ export interface SampleNotice {
   content: string;
 }
 
+function formatDateOffset(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return `${String(date.getDate()).padStart(2, "0")}/${String(
+    date.getMonth() + 1
+  ).padStart(2, "0")}/${date.getFullYear()}`;
+}
+
+const SCAM_ISSUE_DATE = formatDateOffset(-1);
+const GENUINE_ISSUE_DATE = formatDateOffset(-2);
+const DUE_DATE = formatDateOffset(14);
+
 export const SAMPLES: SampleNotice[] = [
   {
     id: "tax-scam-upi",
@@ -19,7 +31,7 @@ GOVERNMENT OF INDIA - INCOME TAX DEPARTMENT
 OFFICE OF THE TAX RECOVERY OFFICER, CIRCLE 12(1), NEW DELHI
 
 Notice Reference: ITD/DEL/REC/2026/9821
-Date of Issue: 14/10/2026
+Date of Issue: ${SCAM_ISSUE_DATE}
 
 To,
 Shri Rajesh Kumar Sharma
@@ -58,7 +70,7 @@ INCOME TAX DEPARTMENT - GOVERNMENT OF INDIA
 CENTRALIZED PROCESSING CENTRE, BENGALURU 560500
 
 DOCUMENT IDENTIFICATION NUMBER (DIN): ITBA/AST/S/143(1)/2025-26/1048291039
-Communication Date: 10/10/2026
+Communication Date: ${GENUINE_ISSUE_DATE}
 
 To,
 Smt. Ananya Subramanian
@@ -85,6 +97,7 @@ IMPORTANT SECURITY NOTICE:
 1. The Income Tax Department never requests taxpayers to transfer funds through UPI handles, gift cards, or personal accounts.
 2. Tax payments can only be made through the authorized e-Pay Tax portal at https://eportal.incometax.gov.in using Challan ITNS 280.
 3. You can authenticate the validity of this notice by entering the DIN on the official portal at https://eportal.incometax.gov.in under the 'Authenticate Notice/Order issued by ITD' tab.
+4. Please provide any response by ${DUE_DATE}.
 
 Yours faithfully,
 Assistant Commissioner of Income Tax, CPC Bengaluru
@@ -99,7 +112,7 @@ Email: notification@cpc.incometax.gov.in`,
     content: `[SAMPLE NOTICE — FICTIONAL FOR DEMONSTRATION ONLY]
 STATE BANK OF INDIA - URGENT SECURITY ALERT
 SMS / NOTICE REFERENCE: SBI/KYC/URGENT/2026/4102
-Date: 14/10/2026
+Issue Date: ${SCAM_ISSUE_DATE}
 
 Dear Customer Vikram Aditya Verma,
 
@@ -128,7 +141,7 @@ INDIA POST INTERNATIONAL COURIER & CUSTOMS CLEARANCE WING
 INDIRA GANDHI INTERNATIONAL AIRPORT CARGO COMPLEX, NEW DELHI
 
 Notice Number: INPOST/CUST/PARCEL/2026/0912
-Date: 14/10/2026
+Issue Date: ${SCAM_ISSUE_DATE}
 
 To Consignee:
 Mr. Rohan Sen
@@ -169,7 +182,7 @@ MoRTH AUTOMATED SURVEILLANCE NOTIFICATION
 
 Challan Number: DL-CH-2026-891024
 Vehicle Registration: DL 01 AB 1234
-Notice Date: 14/10/2026
+Notice Date: ${SCAM_ISSUE_DATE}
 
 Dear Vehicle Owner Shri Amit Patel,
 
@@ -199,7 +212,7 @@ Support: challan.delhipolice@outlook.com`,
 STATE BANK OF INDIA - PERIODIC CUSTOMER INFORMATION UPDATE
 BRANCH: KORAMANGALA, BENGALURU | IFSC: SBIN0007890
 Reference: SBI/BLR/KYC-REMINDER/2026/8920
-Date: 10/10/2026
+Issue Date: ${GENUINE_ISSUE_DATE}
 
 To,
 Shri Karthik Natarajan
@@ -214,7 +227,7 @@ Dear Customer,
 As part of the periodic customer due diligence mandated by Reserve Bank of India (RBI) regulations for active banking relationships, we invite you to review and confirm that your current contact address and identity credentials are up to date.
 
 Notice Details & Advisory:
-1. Please check your contact information and submit updated documents by 30/11/2026.
+1. Please check your contact information and submit updated documents by ${DUE_DATE}.
 2. You may complete this verification conveniently through SBI NetBanking at the official secured portal: https://onlinesbi.sbi or via the SBI YONO mobile application.
 3. Alternatively, you may submit self-attested photocopies of your valid identity and address proof at any State Bank of India branch of your choice.
 

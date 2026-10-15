@@ -150,7 +150,7 @@ export function VerdictCard({
               <Clock className="h-3.5 w-3.5" />
               <span>
                 {isExpired
-                  ? "Deadline Expired"
+                  ? `Deadline passed ${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} ago`
                   : `${daysRemaining} Day${daysRemaining === 1 ? "" : "s"} Remaining`}
               </span>
             </span>

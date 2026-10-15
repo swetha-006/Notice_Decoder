@@ -103,6 +103,25 @@ describe("Rule-Based Fraud Signal Engine (lib/signals.ts)", () => {
     expect(result.findings.some((finding) => finding.category === "sender" && finding.severity === "critical")).toBe(false);
   });
 
+  it("does not treat an example UPI ID in an explicit never-pay warning as a demand", () => {
+    const result = evaluateSignals(
+      "Never pay to any UPI ID like fraudster@okaxis. Verify independently."
+    );
+    expect(result.hasUpiOrCrypto).toBe(false);
+    expect(result.findings.some((finding) => finding.category === "payment")).toBe(false);
+  });
+
+  it("flags an urgent transfer when an account number and IFSC appear together", () => {
+    const result = evaluateSignals(
+      "Transfer 123456789012 to account IFSC: SBIN0001234 immediately or your account will be frozen."
+    );
+    const finding = result.findings.find((item) => item.category === "payment");
+    expect(result.hasUpiOrCrypto).toBe(true);
+    expect(finding?.severity).toBe("critical");
+    expect(finding?.quote).toContain("123456789012");
+    expect(finding?.quote).toContain("SBIN0001234");
+  });
+
   it("calculates Levenshtein distance accurately", () => {
     expect(levenshteinDistance("incometax", "incometax")).toBe(0);
     expect(levenshteinDistance("incometax", "incomtax")).toBe(1);
