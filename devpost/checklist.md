@@ -67,8 +67,8 @@ Build mode: fast
 ## Final Review
 
 - [x] Previous final review complete — before the approved provider and rules-only safety revision
-- [ ] Post-revision hands-on check — retry the LinkedIn scam and a known genuine notice in the app, then test with both provider keys blank; report how the model-backed and rules-only results behave. A synthetic live request now succeeds through the configured Groq route.
-- [ ] Final review complete — post-revision behavior verified and learner confirms the proof of concept is ready
+- [x] Post-revision hands-on check — learner confirmed the checks looked good; the individual verdict labels were not reported. A synthetic live request also succeeds through the configured Groq route.
+- [x] Final review complete — learner said the proof of concept is perfect and asked to proceed to shipping; no further changes requested.
 
 ## Code Tour and App Map
 
@@ -87,5 +87,5 @@ Revision note: Refreshed `devpost/app-map.html` to show provider fallback and ru
 
 - Approved after hands-on review: prefer Groq using a server-side `GROQ_API_KEY`, try configured Gemini models when Groq is unavailable, and keep all provider keys in local/server environment variables. Free-tier availability and quotas are account-dependent and may change.
 - Approved safety revision: rules-only analysis must not label an unverified notice Likely genuine just because no scam rule matched; without positive allowlisted official-domain evidence, return Suspicious and require independent verification.
-- Groq strict-schema compatibility revision: on HTTP 400, retry once in JSON-object mode with the full schema in the system instructions; validate all output against the shared Zod schema. This fixed the full live synthetic analysis request, which now returns `source: model`. The learner still needs to retry the earlier LinkedIn scam, a known genuine notice, and rules-only mode with both keys blank.
+- Groq strict-schema compatibility revision: on HTTP 400, retry once in JSON-object mode with the full schema in the system instructions; validate all output against the shared Zod schema. This fixed the full live synthetic analysis request, which now returns `source: model`. The learner confirmed the app and post-revision checks looked good; they did not provide individual verdict labels.
 - Mechanical verification: all 103 tests pass, lint and standalone type-check pass, the provider smoke check succeeds, and the local synthetic `/api/analyze` request returns model-backed output. Production build is deferred while the dev server is active.
