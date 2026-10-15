@@ -415,38 +415,6 @@ notice-check/
 
 Notes: the rate limiter is in memory and per server instance, so it limits bursts rather than guaranteeing a global cap. Keep the API key in Vercel's environment settings, never in the repository.
 
----
-
-## Demo script (60-90 seconds)
-
-| Time | Screen | Action | What to notice |
-|---|---|---|---|
-| 0:00-0:15 | Start | Pick the **Income Tax Demand Notice** sample, click **Mask Personal Data & Review** | Masking runs instantly in the browser |
-| 0:15-0:30 | Privacy review | Show the original beside the masked text, the "personal identifiers masked locally" count and the outgoing-text scan | You see exactly what will be sent, and you can mask more by hand |
-| 0:30-0:50 | Result | Click **Confirm & Analyze Masked Notice**. Show the **Likely scam** verdict, urgency badge and the "Why this verdict" breakdown | The letter highlights the arrest threat, the personal UPI ID and the lookalike link; click one for its explanation |
-| 0:50-1:10 | Language and reply | Switch to **Tamil**. Show the summary, checklist and drafted reply | Real details are restored into the reply locally. Reminder: do not reply to a notice judged a scam |
-| 1:10-1:30 | Comparison | **Check Another Notice**, pick **Income Tax Sec 143(1) Intimation** | A calm result that points to the official portal for verification |
-
-Record with fictional samples only.
-
----
-
-## How I used the Devpost skills
-
-The project was built from an empty folder with the Devpost Learn Skill Pack (`challengepost/learn-ai-basics`), using the flipped-interaction approach: the agent interviewed me first, and nothing was built until the plan was written and approved.
-
-| Skill | What happened | Output |
-|---|---|---|
-| `1-start` | Interview about the idea, background and goals | Learner profile (kept private) |
-| `2-scope` | Defined the core idea and what is out of scope | [`devpost/scope.md`](devpost/scope.md) |
-| `3-prd` | Wrote the user journey, requirements, states and acceptance criteria | [`devpost/prd.md`](devpost/prd.md) |
-| `4-spec` | Wrote the technical blueprint: architecture, schemas, module contracts, tests | [`devpost/spec.md`](devpost/spec.md) |
-| `5-build` | Built in small slices, checking each with tests and a build | [`devpost/checklist.md`](devpost/checklist.md), [`devpost/app-map.html`](devpost/app-map.html) |
-| `6-ship` | Repository readiness, privacy check and submission preparation | This README and the submission |
-
-After a review pass, the planning documents were updated with a "Changes after review" section so they match the final code.
-
----
 
 ## What I learned
 
