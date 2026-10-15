@@ -68,7 +68,8 @@ Build mode: fast
 
 - [x] Previous final review complete — before the approved provider and rules-only safety revision
 - [x] Post-revision hands-on check — learner confirmed the checks looked good; the individual verdict labels were not reported. A synthetic live request also succeeds through the configured Groq route.
-- [x] Final review complete — learner said the proof of concept is perfect and asked to proceed to shipping; no further changes requested.
+- [ ] Mobile responsiveness hands-on check — review the input, privacy review, and result screens on a phone-sized viewport; the browser check found and fixed horizontal overflow at 320px.
+- [ ] Final review complete — re-opened for the requested mobile-layout refinement; learner confirms it feels ready after the mobile check.
 
 ## Code Tour and App Map
 
@@ -89,3 +90,4 @@ Revision note: Refreshed `devpost/app-map.html` to show provider fallback and ru
 - Approved safety revision: rules-only analysis must not label an unverified notice Likely genuine just because no scam rule matched; without positive allowlisted official-domain evidence, return Suspicious and require independent verification.
 - Groq strict-schema compatibility revision: on HTTP 400, retry once in JSON-object mode with the full schema in the system instructions; validate all output against the shared Zod schema. This fixed the full live synthetic analysis request, which now returns `source: model`. The learner confirmed the app and post-revision checks looked good; they did not provide individual verdict labels.
 - Mechanical verification: all 103 tests pass, lint and standalone type-check pass, the provider smoke check succeeds, and the local synthetic `/api/analyze` request returns model-backed output. Production build is deferred while the dev server is active.
+- Pre-deployment mobile responsiveness refinement: the privacy review overflowed horizontally at 320px when showing long identifier values and the manual-mask controls. Identifier chips now wrap, the manual-mask form stacks on narrow screens, and notice/evidence text can break long words. Browser checks across 320, 360, 375, 390, 768, 1024, and 1440px show no horizontal overflow on input, privacy-review, and result screens. Learner visual confirmation remains pending.

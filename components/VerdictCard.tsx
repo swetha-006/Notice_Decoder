@@ -109,7 +109,7 @@ export function VerdictCard({
       className={`rounded-lg border-2 p-6 shadow-sm ${verdictStyles.border} ${verdictStyles.bg}`}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <span
             className={`flex h-12 w-12 items-center justify-center rounded-lg shadow-sm ${verdictStyles.badge}`}
           >
@@ -121,9 +121,9 @@ export function VerdictCard({
               <CheckCircle2 className="h-7 w-7" />
             )}
           </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-serif text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="break-words font-serif text-2xl font-bold tracking-tight text-ink sm:text-3xl">
                 {localizedTitle}
               </h2>
               <span className="rounded bg-canvas-card px-2 py-0.5 text-xs font-mono font-semibold text-ink border border-border">

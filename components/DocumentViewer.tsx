@@ -38,7 +38,7 @@ export function DocumentViewer({
 
       {/* Main Document Body */}
       <div className="relative flex-1 p-5 overflow-y-auto max-h-[650px]">
-        <div className="whitespace-pre-wrap font-sans text-xs sm:text-sm text-ink leading-relaxed">
+        <div className="whitespace-pre-wrap break-words font-sans text-xs sm:text-sm text-ink leading-relaxed">
           {segments.map((segment, index) => {
             if (!segment.flag) {
               return <span key={index}>{segment.text}</span>;
@@ -78,12 +78,12 @@ export function DocumentViewer({
       {/* Selected Flag Detail Tray / Tooltip Drawer */}
       <div className="border-t border-border bg-canvas-subtle p-4">
         {selectedFlag ? (
-          <div className="flex flex-col gap-2 rounded-md border border-border bg-canvas-card p-3 shadow-xs">
+          <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border bg-canvas-card p-3 shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-ink">
+              <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-ink">
                 <AlertCircle className="h-3.5 w-3.5 text-scam" />
                 <span>Flagged Evidence:</span>
-                <code className="rounded bg-canvas-muted px-1.5 py-0.5 font-mono text-[11px] text-ink">
+                <code className="max-w-full break-all rounded bg-canvas-muted px-1.5 py-0.5 font-mono text-[11px] text-ink">
                   &ldquo;{selectedFlag.quote}&rdquo;
                 </code>
               </span>
