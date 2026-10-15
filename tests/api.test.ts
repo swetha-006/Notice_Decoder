@@ -67,6 +67,8 @@ beforeEach(() => {
   vi.stubEnv("GEMINI_API_KEY", "test-key");
   vi.stubEnv("GEMINI_MODEL", "gemini-test-primary");
   vi.stubEnv("GEMINI_MODEL_FALLBACKS", "");
+  vi.stubEnv("GROQ_API_KEY", "");
+  vi.stubEnv("GROQ_MODEL", "groq-test-model");
   geminiMocks.generateContent.mockReset();
   geminiMocks.getGenerativeModel.mockReset();
   geminiMocks.getGenerativeModel.mockImplementation(() => ({
@@ -76,6 +78,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe("API Route Validation & Rate Limiting (lib/rate-limit.ts & lib/schema.ts)", () => {
@@ -216,6 +219,71 @@ describe("API Route Validation & Rate Limiting (lib/rate-limit.ts & lib/schema.t
     );
   });
 
+  it("uses Groq first when configured", async () => {
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({ choices: [{ message: { content: validModelResponse() } }] })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await postAnalyze();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.source).toBe("model");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.groq.com/openai/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer groq-test-key",
+        }),
+        body: expect.stringContaining('"model":"groq-test-model"'),
+      })
+    );
+    expect(geminiMocks.generateContent).not.toHaveBeenCalled();
+  });
+
+  it("falls back from a Groq provider failure to Gemini", async () => {
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("private provider diagnostic", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    geminiMocks.generateContent.mockResolvedValue({
+      response: { text: validModelResponse },
+    });
+
+    const response = await postAnalyze();
+    const data = await response.json();
+
+    expect(data.source).toBe("model");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(geminiMocks.generateContent).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(data)).not.toContain("private provider diagnostic");
+  });
+
+  it("retries Groq output that fails the shared response schema", async () => {
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ choices: [{ message: { content: '{"verdict":"unknown"}' } }] })
+      )
+      .mockResolvedValueOnce(
+        Response.json({ choices: [{ message: { content: validModelResponse() } }] })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await postAnalyze();
+    const data = await response.json();
+
+    expect(data.source).toBe("model");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("retries invalid JSON once and succeeds on the retry", async () => {
     geminiMocks.generateContent
       .mockResolvedValueOnce({ response: { text: () => "not json" } })
@@ -300,23 +368,70 @@ describe("API Route Validation & Rate Limiting (lib/rate-limit.ts & lib/schema.t
 
   it("returns missing_key when no API key is configured", async () => {
     vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("GROQ_API_KEY", "");
 
     const response = await postAnalyze();
     const data = await response.json();
 
     expect(data.source).toBe("rules_only");
     expect(data.fallbackReason).toBe("missing_key");
+    expect(data.verdict).toBe("suspicious");
+    expect(data.oneSentenceReason.en).toMatch(/cannot confirm this notice/i);
     expect(geminiMocks.generateContent).not.toHaveBeenCalled();
   });
 
-  it("reports only the health status, AI configuration, and configured model", async () => {
+  it("allows rules-only likely_genuine only when an allowlisted official domain is present", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("GROQ_API_KEY", "");
+
+    const response = await postAnalyze(
+      "Review your income tax assessment at https://incometax.gov.in."
+    );
+    const data = await response.json();
+
+    expect(data.source).toBe("rules_only");
+    expect(data.verdict).toBe("likely_genuine");
+    expect(data.flags.some((flag: { severity: string }) => flag.severity === "positive")).toBe(
+      true
+    );
+  });
+
+  it("reports the preferred Groq provider without exposing API keys", async () => {
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
     const { GET } = await import("@/app/api/health/route");
     const response = await GET();
 
     expect(await response.json()).toEqual({
       status: "healthy",
       aiConfigured: true,
+      provider: "groq",
+      model: "groq-test-model",
+    });
+  });
+
+  it("reports Gemini when it is configured without Groq", async () => {
+    const { GET } = await import("@/app/api/health/route");
+    const response = await GET();
+
+    expect(await response.json()).toEqual({
+      status: "healthy",
+      aiConfigured: true,
+      provider: "gemini",
       model: "gemini-test-primary",
+    });
+  });
+
+  it("reports rules-only mode when neither provider is configured", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("GROQ_API_KEY", "");
+    const { GET } = await import("@/app/api/health/route");
+    const response = await GET();
+
+    expect(await response.json()).toEqual({
+      status: "healthy",
+      aiConfigured: false,
+      provider: "rules_only",
+      model: null,
     });
   });
 

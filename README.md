@@ -4,7 +4,7 @@
 
 A privacy-first, evidence-grounded verification engine for official-looking tax demands, bank freeze alerts, customs fees, and traffic e-challans.
 
-Built with Next.js (App Router), TypeScript (strict), Google Gemini (free tier), and pure in-browser heuristic PII redaction for the **Devpost "Build With AI: Basics" Hackathon**.
+Built with Next.js (App Router), TypeScript (strict), Groq with Gemini fallback, and pure in-browser heuristic PII redaction for the **Devpost "Build With AI: Basics" Hackathon**.
 
 ---
 
@@ -20,7 +20,7 @@ Notice Check operates on a **dual-engine, privacy-preserving architecture**:
 
 1. **In-Browser PII Redaction**: Before text leaves the machine, regex and heuristic engines replace names, phone numbers, email addresses, PANs, Aadhaar numbers, and bank account numbers with anonymous tokens (e.g. `[PERSON_1]`, `[PAN_1]`). The token map remains in browser memory only.
 2. **Deterministic Fraud Signal Engine**: Runs pure TypeScript rules verifying non-governmental payment mechanisms (UPI handles, crypto, gift cards), urgency threat patterns, domain lookalikes (Levenshtein distance against official `.gov.in` allowlists), and response deadlines.
-3. **Structured Model Analysis**: Calls Google Gemini (configurable model via `GEMINI_MODEL`, default `gemini-3.8-flash`) via a protected server route requesting structured JSON with a strict Zod schema.
+3. **Structured Model Analysis**: Tries Groq first (`GROQ_MODEL`, default `openai/gpt-oss-20b`), then configured Gemini models as fallback. The protected server route requests JSON and validates it with a strict Zod schema.
 4. **Strict Evidence Grounding**: Every quote returned by the model is validated as a verbatim substring in the submitted notice using whitespace-normalized alignment. Any ungrounded claim is dropped immediately.
 5. **Deterministic Composite Scoring**: Combines rule signals and grounded model findings using a transparent formula (`/lib/scoring.ts`) to produce a definitive verdict (**Likely genuine**, **Suspicious**, or **Likely scam**), urgency level, and days-remaining deadline.
 6. **Local Rehydration**: Formal drafted clarification and dispute letters have their personal details restored locally in the browser, with one-click copy and translations in **English**, **Tamil (தமிழ்)**, and **Hindi (हिन्दी)**.
@@ -43,8 +43,8 @@ flowchart TD
     subgraph ServerRoute ["Next.js App Router Server (/api/analyze)"]
         PrivacyGate -.->|"Masked Text Only ([PERSON_1], [PAN_1])"| RateLimiter["Per-instance in-memory limiter (configurable)"]
         RateLimiter --> ZodIn["Zod Request Validator (<= 10k chars)"]
-        ZodIn --> GeminiAPI["Google Gemini API (Free Tier: gemini-3.8-flash)"]
-        GeminiAPI --> ZodOut["Zod Structured Schema Validator + Auto-Retry"]
+        ZodIn --> AIProviders["Groq preferred; configured Gemini fallback"]
+        AIProviders --> ZodOut["Shared Zod Schema Validator + Auto-Retry"]
     end
 
     subgraph GroundingPipeline ["Client Evidence Grounding & Synthesis"]
@@ -68,7 +68,7 @@ flowchart TD
 - **Outgoing-text preview and scan**: The preview shows the exact text that the app will submit and scans it for common residual identifier patterns. The scan is a safeguard, not a guarantee; it cannot reliably identify every name, address, or unusual identifier.
 - **In-memory token map**: Original values used for rehydrating draft replies stay in browser memory and are cleared when the page state is reset or the page is reloaded.
 - **No intentional application persistence**: The application code does not intentionally write notice text to a database or log request bodies. Hosting platforms and network infrastructure may process request metadata or maintain operational logs outside this application's control.
-- **Third-party model processing**: When Gemini analysis is enabled, the masked text shown in the preview is sent to Google's Gemini API. Do not submit content you are not comfortable sharing with the configured service, even after masking.
+- **Third-party model processing**: When AI analysis is enabled, the masked text shown in the preview is sent to the configured Groq or Gemini API. Do not submit content you are not comfortable sharing with that service, even after masking. Provider free tiers, model availability, and quotas can change.
 - **Self-hosted assets and browser policy**: Interface fonts are served from this app rather than Google Fonts. A Content Security Policy restricts scripts, connections, fonts, images, frames, and form destinations to the app's required sources. Next.js hydration currently requires `unsafe-inline` in `script-src`; development additionally allows eval and local WebSocket connections for the dev server.
 
 ### Honest limits
@@ -83,7 +83,8 @@ flowchart TD
 ### Prerequisites
 - Node.js 18+ (tested on Node 20 / 22 / 24)
 - npm or pnpm
-- Google AI Studio API key (free tier): [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+- Groq API key (preferred): [console.groq.com/keys](https://console.groq.com/keys)
+- Google AI Studio API key (optional Gemini fallback): [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 
 ### 1. Clone & Install
 ```bash
@@ -96,24 +97,26 @@ npm install
 ```bash
 cp .env.example .env.local
 ```
-Add your free Google Gemini API key:
+Add provider keys to `.env.local` (never paste keys into chat or commit them). Groq is preferred; Gemini is used if Groq is unavailable:
 ```env
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=openai/gpt-oss-20b
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-3.8-flash
 GEMINI_MODEL_FALLBACKS=
 RATE_LIMIT_MAX_REQUESTS=10
 RATE_LIMIT_WINDOW_MS=60000
 ```
-*(Note: If `GEMINI_API_KEY` is omitted, the app automatically runs in offline rule-based mode).*
+If neither API key is configured, the app runs in rules-only mode. Without positive evidence from an allowlisted official domain, rules-only results are marked **Suspicious** and must be independently verified; absence of detected scam signals is not proof of authenticity. In rules-only mode, **Likely genuine** requires positive official evidence. Free-tier access and quotas vary and may change.
 
 The rate limiter defaults to 10 requests per 60 seconds. Its in-memory state is per server instance, so it is not a distributed production abuse-control system. Set `RATE_LIMIT_MAX_REQUESTS` and `RATE_LIMIT_WINDOW_MS` to positive integers to change the limit.
 
-### Check Gemini before a demo
-With `GEMINI_API_KEY` configured in `.env.local`, run:
+### Check the configured AI provider before a demo
+With either `GROQ_API_KEY` or `GEMINI_API_KEY` configured in `.env.local`, run:
 ```bash
 npm run check:model
 ```
-The command makes one small schema-constrained request and prints `OK` or a classified failure without exposing provider error details.
+The command tests Groq first and falls back to Gemini when configured. It makes one small JSON request and prints `OK` or a classified failure without exposing provider error details.
 
 ### 3. Run Locally
 ```bash
@@ -136,7 +139,9 @@ Run the full Vitest suite with `npm test` to validate redaction, privacy scannin
 2. Sign in to [vercel.com](https://vercel.com) (free hobby tier).
 3. Click **Add New Project** and select this repository.
 4. Under **Environment Variables**, add:
-   - `GEMINI_API_KEY`: Your Google AI Studio API key.
+   - `GROQ_API_KEY`: Your Groq API key (preferred).
+   - `GROQ_MODEL`: `openai/gpt-oss-20b` (or a currently available compatible model).
+   - `GEMINI_API_KEY`: Optional Gemini fallback key.
    - `GEMINI_MODEL`: `gemini-3.8-flash`.
    - `GEMINI_MODEL_FALLBACKS`: Optional comma-separated models, attempted only if the primary model is unavailable.
 5. Click **Deploy**. Your app is live in under 60 seconds with zero hosting costs.

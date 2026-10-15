@@ -50,7 +50,7 @@ export function RedactionPreview({
             This is exactly what will be sent
           </h2>
           <p className="mt-1 max-w-3xl text-xs text-ink-secondary">
-            Only the masked text shown below is submitted to this app. If Gemini analysis is enabled, that masked text is sent to Google for processing. Automatic masking can miss details, so review the outgoing text and mask anything sensitive before continuing.
+            Only the masked text shown below is submitted to this app. If AI analysis is enabled, that masked text is processed by the configured provider (Groq or Gemini). Automatic masking can miss details, so review the outgoing text and mask anything sensitive before continuing.
           </p>
         </div>
 

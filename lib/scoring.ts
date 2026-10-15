@@ -45,6 +45,11 @@ export interface ScoringResult {
 export function calculateVerdict(input: ScoringInput): ScoringResult {
   const { ruleSignals, groundedFlags, modelVerdict, modelConfidence = 75 } = input;
   const breakdown: Array<{ factor: string; points: number }> = [];
+  const hasPositiveOfficialEvidence =
+    ruleSignals.hasValidGovDomain ||
+    groundedFlags.some((flag) => flag.severity === "positive");
+  const rulesOnlyLacksVerification =
+    !modelVerdict && !hasPositiveOfficialEvidence;
   let score = 0;
 
   // 1. Hard Disqualifiers / Critical Overrides
@@ -149,6 +154,22 @@ export function calculateVerdict(input: ScoringInput): ScoringResult {
     }
   }
 
+  if (
+    score < 30 &&
+    (rulesOnlyLacksVerification ||
+      modelVerdict === "suspicious" ||
+      modelVerdict === "likely_scam")
+  ) {
+    const safetyFloorPoints = 30 - score;
+    score = 30;
+    breakdown.push({
+      factor: rulesOnlyLacksVerification
+        ? "No AI assessment or positive official marker; require independent verification"
+        : "Model signals require independent verification",
+      points: safetyFloorPoints,
+    });
+  }
+
   // Bound score between 0 and 100
   score = Math.max(0, Math.min(100, score));
 
@@ -189,18 +210,24 @@ export function calculateVerdict(input: ScoringInput): ScoringResult {
   } else if (score >= 30) {
     verdict = "suspicious";
     urgencyLevel = "medium";
-    reason = {
-      en: "This notice exhibits procedural irregularities, suspicious links, or unusual urgency. Do not pay without official portal verification.",
-      ta: "இக்கடிதத்தில் சந்தேகத்திற்கிடமான இணைப்புகள் மற்றும் அசாதாரண அவசரம் உள்ளது. அதிகாரப்பூர்வ தளத்தில் சரிபார்க்காமல் பணம் செலுத்தாதீர்கள்.",
-      hi: "इस नोटिस में असामान्य तात्कालिकता या संदिग्ध लिंक हैं। आधिकारिक पोर्टल पर सत्यापन किए बिना कोई भुगतान न करें।",
-    };
+    reason = rulesOnlyLacksVerification
+      ? {
+          en: "Rules-only checks cannot confirm this notice without positive official evidence. Verify its sender and reference independently before acting.",
+          ta: "அதிகாரப்பூர்வ ஆதாரம் இல்லாமல் விதி-அடிப்படையிலான சரிபார்ப்பால் இந்த அறிவிப்பை உறுதிப்படுத்த முடியாது. செயல்படுவதற்கு முன் அனுப்புநரையும் குறிப்பையும் தனியாகச் சரிபார்க்கவும்.",
+          hi: "सकारात्मक आधिकारिक प्रमाण के बिना नियम-आधारित जांच इस नोटिस की पुष्टि नहीं कर सकती। कार्रवाई से पहले प्रेषक और संदर्भ की स्वतंत्र रूप से पुष्टि करें।",
+        }
+      : {
+          en: "This notice exhibits procedural irregularities, suspicious links, or unusual urgency. Do not pay without official portal verification.",
+          ta: "இக்கடிதத்தில் சந்தேகத்திற்கிடமான இணைப்புகள் மற்றும் அசாதாரண அவசரம் உள்ளது. அதிகாரப்பூர்வ தளத்தில் சரிபார்க்காமல் பணம் செலுத்தாதீர்கள்.",
+          hi: "इस नोटिस में असामान्य तात्कालिकता या संदिग्ध लिंक हैं। आधिकारिक पोर्टल पर सत्यापन किए बिना कोई भुगतान न करें।",
+        };
   } else {
     verdict = "likely_genuine";
     urgencyLevel = "low";
     reason = {
-      en: "This notice matches standard administrative formats and directs actions strictly to official government portals.",
-      ta: "இக்கடிதம் முறையான அரசு விதிமுறைகளுடன் பொருந்துகிறது மற்றும் அதிகாரப்பூர்வ இணையதளத்தை மட்டுமே குறிப்பிடுகிறது.",
-      hi: "यह नोटिस मानक प्रशासनिक प्रारूप से मेल खाता है और केवल आधिकारिक सरकारी पोर्टलों को संदर्भित करता है।",
+      en: "An allowlisted official domain was found and no high-risk signals were detected. Verify the notice on that official channel before acting.",
+      ta: "அங்கீகரிக்கப்பட்ட அதிகாரப்பூர்வ இணையதளம் காணப்பட்டது; அதிக ஆபத்துள்ள அறிகுறிகள் இல்லை. செயல்படுவதற்கு முன் அந்த அதிகாரப்பூர்வ வழியில் அறிவிப்பைச் சரிபார்க்கவும்.",
+      hi: "अनुमोदित आधिकारिक डोमेन मिला और कोई उच्च-जोखिम संकेत नहीं मिला। कार्रवाई से पहले उसी आधिकारिक माध्यम पर नोटिस की पुष्टि करें।",
     };
   }
 
@@ -212,7 +239,8 @@ export function calculateVerdict(input: ScoringInput): ScoringResult {
   const modelFlagSupportsScam = groundedModelFlags.some((flag) => flag.severity === "critical" || flag.category === "threat_or_coercion" || flag.category === "suspicious_demand");
   const modelFlagContradictsScam = groundedModelFlags.some((flag) => flag.severity === "positive");
   const flagsDisagree = verdict === "likely_scam" ? modelFlagContradictsScam : verdict === "likely_genuine" && modelFlagSupportsScam;
-  const verifyBeforeActing = modelDisagrees || flagsDisagree;
+  const verifyBeforeActing =
+    modelDisagrees || flagsDisagree || !modelVerdict;
   const confidenceLevel: "high" | "medium" | "low" = verifyBeforeActing || !modelVerdict ? "low" : hardRuleSignal ? "high" : modelVerdict === verdict && groundedModelFlags.length > 0 ? "high" : "medium";
 
   return {

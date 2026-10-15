@@ -43,7 +43,7 @@ Build mode: fast
   Becomes usable: `/api/analyze` Route Handler that validates incoming masked text, enforces in-memory rate limiting (10 req/min/IP), calls Google Gemini using the configurable `GEMINI_MODEL` env variable with structured JSON, validates responses against `AnalysisResponseSchema` (Zod), retries once on error, and provides a graceful fallback if the key is missing or invalid.
   Why now: Connects the server-side AI model safely without exposing the API key to client browsers, completing the dual-engine pipeline.
   PRD ref: `prd.md > Structured AI Analysis & Strict Evidence Grounding`, `prd.md > States and Boundaries`
-  Spec ref: `spec.md > External Services and Dependencies`, `spec.md > Data Model > Gemini Structured Response Schema`, `spec.md > Important Failure Modes`
+  Spec ref: `spec.md > External Services and Dependencies`, `spec.md > Data Model > Shared Structured Response Schema`, `spec.md > Important Failure Modes`
   Build: Create `/lib/schema.ts` with Zod validation schemas. Implement `/lib/rate-limit.ts` with an in-memory token bucket limiter. Implement `/app/api/analyze/route.ts` with model invocation, retry logic, error handling, and security headers. Create `.env.example`.
   Verify (mechanical): Run `npx vitest run` across all test suites, and execute a mock test against `/api/analyze` validating rate limiting, payload size rejection (>10k chars), and schema handling.
   Learner check: Trigger the route with mock input to verify structured JSON response containing categorized flags, checklist, and localized drafts.
@@ -66,7 +66,9 @@ Build mode: fast
 
 ## Final Review
 
-- [x] Final review complete — feedback resolved and learner confirms ready to ship
+- [x] Previous final review complete — before the approved provider and rules-only safety revision
+- [ ] Post-revision hands-on check — configure a local Groq key, test the LinkedIn scam and a known genuine notice, and report whether rules-only uncertainty and provider fallback behave as expected
+- [ ] Final review complete — post-revision behavior verified and learner confirms the proof of concept is ready
 
 ## Code Tour and App Map
 
@@ -75,9 +77,14 @@ Build mode: fast
 - [x] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
 
 Activity and evidence: Verified complete 4-stage pipeline across lib/redact.ts, lib/signals.ts, lib/grounding.ts, lib/scoring.ts, and app/api/analyze/route.ts with 33 passing Vitest tests.
-Route and stops: lib/redact.ts (redactNotice & rehydrate) -> lib/signals.ts (evaluateSignals) -> app/api/analyze/route.ts (Gemini schema & rate limit) -> lib/grounding.ts (findVerbatimQuote & mergeAndDeDuplicateFlags) -> lib/scoring.ts (calculateVerdict).
+Route and stops: lib/redact.ts (redactNotice & rehydrate) -> lib/signals.ts (evaluateSignals) -> app/api/analyze/route.ts (Groq-first/Gemini fallback, shared schema & rate limit) -> lib/grounding.ts (findVerbatimQuote & mergeAndDeDuplicateFlags) -> lib/scoring.ts (calculateVerdict).
 Edit outcome: Fixed severity type union across grounding and schema; fixed domain regex for multi-level subdomains.
 Reflection: Evidence grounding and local-first client-side redaction effectively solve both LLM hallucination risk and consumer privacy anxiety simultaneously.
 Activity mode: live app, automated test suites, and devpost/app-map.html visual take-home guide.
+Revision note: Refreshed `devpost/app-map.html` to show provider fallback and rules-only verification behavior.
 
 ## Revisions
+
+- Approved after hands-on review: prefer Groq using a server-side `GROQ_API_KEY`, try configured Gemini models when Groq is unavailable, and keep all provider keys in local/server environment variables. Free-tier availability and quotas are account-dependent and may change.
+- Approved safety revision: rules-only analysis must not label an unverified notice Likely genuine just because no scam rule matched; without positive allowlisted official-domain evidence, return Suspicious and require independent verification.
+- Mechanical verification will cover Groq success, Groq-to-Gemini fallback, schema retry, safe health status, and conservative rules-only scoring. Live provider behavior remains unverified until a learner-configured key is tested.

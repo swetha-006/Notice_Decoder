@@ -11,8 +11,8 @@ Source: `scope.md > The Unique Kernel`.
 ## The Core Journey
 1. **Arrival & Input**: The user arrives on a clean, quiet interface. They can paste any notice text into an expansive input area or click one of 6 pre-loaded fictional sample notices (e.g. Income Tax Demand, Courier Customs Fee, Bank KYC Suspension, Traffic E-Challan).
 2. **Instant Privacy Detection**: As soon as text is present and the user initiates check, the client-side redactor scans the text locally. Identifiers (names, phone numbers, email addresses, PAN, Aadhaar, bank accounts, IFSC, PIN codes) are replaced with structured tokens (e.g., `[PERSON_1]`, `[PAN_1]`).
-3. **Explicit "What Will Be Sent" Preview**: A dedicated card or modal displays the exact redacted text that will travel to the server. The user can manually click or select additional words to mask. They see accurate privacy copy explaining that masking is best-effort, only the displayed masked text is submitted, and the outgoing text may be processed by Google Gemini when model analysis is enabled.
-4. **Analysis with Dual-Engine Evaluation**: Upon confirmation, the redacted text is submitted. The rule-based signal engine executes immediate deterministic tests (UPI handles, threat terms, domain lookalikes via Levenshtein distance, non-.gov.in checks, sender mismatches, deadline math), while the `/api/analyze` route prompts Google Gemini for structured analysis.
+3. **Explicit "What Will Be Sent" Preview**: A dedicated card or modal displays the exact redacted text that will travel to the server. The user can manually click or select additional words to mask. They see accurate privacy copy explaining that masking is best-effort, only the displayed masked text is submitted, and the outgoing text may be processed by the configured Groq or Gemini provider when model analysis is enabled.
+4. **Analysis with Dual-Engine Evaluation**: Upon confirmation, the redacted text is submitted. The rule-based signal engine executes immediate deterministic tests (UPI handles, threat terms, domain lookalikes via Levenshtein distance, non-.gov.in checks, sender mismatches, deadline math), while the `/api/analyze` route tries Groq first and configured Gemini models as fallback for structured analysis.
 5. **Evidence Grounding Verification**: Every claim made by the model is validated against the submitted text. If a cited quote cannot be found verbatim (with whitespace normalized), it is dropped. Verified model flags are merged with rule-engine flags, de-duplicating overlapping character spans.
 6. **Side-by-Side Document Review**:
    - **Left Panel (Document View)**: The original notice is rendered with exact trigger lines highlighted in semantic colors (red for scam indicators, amber for suspicious traits, green/neutral for standard administrative language). Hovering or clicking a highlight shows the plain-language explanation.
@@ -94,7 +94,9 @@ Pure TypeScript module running deterministically:
 5. **Deadline Extraction & Math**: Recognizes dates only when attached to an explicit due phrase (`on or before`, `by`, `last date`, `due date`, `pay by`, `respond by`) or a relative period (`within N days/hours`). Supports `DD/MM/YYYY`, `DD-MM-YYYY`, and named dates with ordinal days. Relative periods are calculated from an explicit issue date when present; otherwise the phrase is shown without a countdown. Invalid calendar dates and incidental dates are ignored. Past deadlines say “Deadline passed N days ago.”
 
 ### Structured AI Analysis & Strict Evidence Grounding
-- Server route calls Gemini with structured output schema (Zod).
+- Server route calls the configured AI provider with structured output validated by Zod.
+- Groq is the preferred provider; Gemini is attempted as fallback when configured. API keys stay in server environment variables and are never sent to the browser.
+- In rules-only mode, absence of scam indicators is not positive proof: without a verified official-domain signal, the verdict is Suspicious and the user must verify independently.
 - Model outputs:
   - Document summary: Category, issuing authority claim, primary demand.
   - Urgency level: Low, Medium, High.
@@ -129,7 +131,7 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 - **Redaction State**: Highlighting identified personal identifiers, allowing one-click toggle or manual word selection.
 - **Analyzing State**: Unobtrusive progress indication ("Checking official domain registries...", "Running signal heuristics...", "Grounding evidence...").
 - **Completed Result State**: Split view with highlighted text and action checklist.
-- **Retry / Recovery State**: If Gemini API returns invalid JSON or schema errors, the server retries once; if it fails again, returns a graceful fallback combining the full rule-based signal results.
+- **Retry / Recovery State**: If a configured provider returns invalid JSON or schema errors, the server retries once; if it fails again or is unavailable, the next configured provider is tried, then a graceful rules-only fallback is returned.
 - **Rate Limit State**: Configurable in-memory per-instance rate limiting defaults to 10 requests per 60 seconds. It identifies clients from platform/client IP headers, falling back to user-agent; deployments with multiple instances do not share this state.
 - **Session Boundary**: Completely ephemeral. Reloading clears all data; no local storage of notice contents.
 
@@ -145,7 +147,7 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 - Rule-based signal engine (UPI, crypto, urgency threats, lookalike domains, sender mismatch, deadline math).
 - Evidence grounding engine with whitespace normalization and character offset highlighter.
 - Deterministic scoring function in `/lib/scoring.ts`.
-- Next.js Route Handler `/api/analyze` with Gemini free-tier structured JSON output, Zod schema validation, retry logic, and in-memory rate limiting.
+- Next.js Route Handler `/api/analyze` with Groq-preferred/Gemini-fallback JSON output, Zod schema validation, retry logic, and in-memory rate limiting.
 - 6 fictional sample letters in `/samples`.
 - Editorial document split-screen UI with responsive mobile layout.
 - Multi-language output (English, Tamil, Hindi).
@@ -175,4 +177,5 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 - Phase 1: Model quotes containing redaction tokens are rehydrated locally before grounding against the original notice.
 - Phase 1: Confidence is a qualitative high / medium / low level based on signal agreement, and the UI shows the scoring breakdown. Positive markers cannot offset hard-risk signals.
 - Phase 1: The configured Gemini primary and optional fallbacks use a current, documented model; fallbacks are attempted only for model-unavailable failures. Rules-only results identify a safe fallback reason rather than exposing provider errors.
+- Approved revision: Groq is preferred with Gemini fallback, using server-side environment keys; provider free-tier availability and quotas may change. Rules-only notices without positive official-domain evidence now require independent verification and cannot be labelled Likely genuine.
 - Phase 2: Automatic masking and local token restoration replace matched spans in one pass. A best-effort outgoing-text scan reports only identifier categories and counts, and blocks analysis until detected patterns are manually masked.

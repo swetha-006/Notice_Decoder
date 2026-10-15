@@ -125,8 +125,9 @@ export default function Home() {
       const scoreRes = calculateVerdict({
         ruleSignals,
         groundedFlags: merged,
-        modelVerdict: modelData.verdict,
-        modelConfidence: modelData.confidenceScore,
+        modelVerdict: modelData.source === "model" ? modelData.verdict : undefined,
+        modelConfidence:
+          modelData.source === "model" ? modelData.confidenceScore : undefined,
       });
       setScoringResult(scoreRes);
 
@@ -285,7 +286,7 @@ export default function Home() {
             Notice Check · Privacy-First Administrative Verification Engine · Devpost Build With AI: Basics
           </p>
           <p className="mt-1 text-[11px] text-ink-muted">
-            Automatic masking is best-effort. Review the exact outgoing text; masked text is sent to this app and may be processed by Google Gemini when AI analysis is enabled. The app does not intentionally persist notice content.
+            Automatic masking is best-effort. Review the exact outgoing text; masked text is sent to this app and may be processed by the configured Groq or Gemini provider when AI analysis is enabled. The app does not intentionally persist notice content.
           </p>
         </div>
       </footer>

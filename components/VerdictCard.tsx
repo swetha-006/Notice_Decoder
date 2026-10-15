@@ -98,6 +98,12 @@ export function VerdictCard({
       ? urgencyStyles.labelHi
       : urgencyStyles.label;
 
+  const verifyMessage = {
+    en: "Verify before acting — automated checks cannot confirm authenticity.",
+    ta: "செயல்படுவதற்கு முன் சரிபார்க்கவும் — தானியங்கி சரிபார்ப்பால் உண்மைத்தன்மையை உறுதிப்படுத்த முடியாது.",
+    hi: "कार्रवाई से पहले पुष्टि करें — स्वचालित जांच प्रामाणिकता की पुष्टि नहीं कर सकती।",
+  }[currentLang];
+
   return (
     <div
       className={`rounded-lg border-2 p-6 shadow-sm ${verdictStyles.border} ${verdictStyles.bg}`}
@@ -158,7 +164,9 @@ export function VerdictCard({
         </div>
       </div>
 
-      {verifyBeforeActing && <p className="mt-3 font-semibold text-suspicious-text">Verify before acting — the signals do not fully agree.</p>}
+      {verifyBeforeActing && (
+        <p className="mt-3 font-semibold text-suspicious-text">{verifyMessage}</p>
+      )}
 
       {/* One-Sentence Reason */}
       <div className="mt-4 rounded-md border border-border-subtle bg-canvas-card p-4">
