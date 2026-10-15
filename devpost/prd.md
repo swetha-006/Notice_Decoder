@@ -173,3 +173,4 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 - Phase 1: Model quotes containing redaction tokens are rehydrated locally before grounding against the original notice.
 - Phase 1: Confidence is a qualitative high / medium / low level based on signal agreement, and the UI shows the scoring breakdown. Positive markers cannot offset hard-risk signals.
 - Phase 1: The configured Gemini primary and optional fallbacks use a current, documented model; fallbacks are attempted only for model-unavailable failures. Rules-only results identify a safe fallback reason rather than exposing provider errors.
+- Phase 2: Automatic masking and local token restoration replace matched spans in one pass. A best-effort outgoing-text scan reports only identifier categories and counts, and blocks analysis until detected patterns are manually masked.

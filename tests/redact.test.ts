@@ -53,6 +53,14 @@ describe("In-Browser Redaction Module (lib/redact.ts)", () => {
     expect(result.tokenMap["[IFSC_1]"]).toBe("SBIN0001234");
   });
 
+  it("replaces only the matched account number while preserving surrounding text", () => {
+    const result = redactNotice("Account No: 987654321098; reference 2026/123.");
+
+    expect(result.redactedText).toBe(
+      "Account No: [ACCOUNT_1]; reference 2026/123."
+    );
+  });
+
   it("masks Indian postal PIN codes following keyword", () => {
     const notice = "Registered address in Chennai, PIN Code: 600001.";
     const result = redactNotice(notice);
@@ -82,6 +90,25 @@ describe("In-Browser Redaction Module (lib/redact.ts)", () => {
     expect(manual.tokenMap["[CUSTOM_1]"]).toBe("SecretProject");
   });
 
+  it("chooses an unused custom token when existing token numbers are sparse", () => {
+    const manual = manualMask("first second", "second", {
+      "[CUSTOM_1]": "older value",
+      "[CUSTOM_3]": "another value",
+    });
+
+    expect(manual.token).toBe("[CUSTOM_2]");
+    expect(manual.tokenMap["[CUSTOM_1]"]).toBe("older value");
+    expect(manual.tokenMap["[CUSTOM_3]"]).toBe("another value");
+    expect(manual.redactedText).toBe("first [CUSTOM_2]");
+  });
+
+  it("does not reuse a custom token already present in the notice text", () => {
+    const manual = manualMask("[CUSTOM_1] and private", "private", {});
+
+    expect(manual.token).toBe("[CUSTOM_2]");
+    expect(manual.redactedText).toBe("[CUSTOM_1] and [CUSTOM_2]");
+  });
+
   it("rehydrates draft text locally with 100% fidelity", () => {
     const notice = "Dear Sunita Patel, your PAN ABCDE1234F has an issue.";
     const { redactedText, tokenMap } = redactNotice(notice);
@@ -93,5 +120,14 @@ describe("In-Browser Redaction Module (lib/redact.ts)", () => {
     expect(rehydrated).toBe(
       "To Income Tax Officer, I am Sunita Patel, holder of PAN ABCDE1234F. I request clarification."
     );
+  });
+
+  it("rehydrates tokens in one pass without expanding tokens inside restored values", () => {
+    expect(
+      rehydrate("[CUSTOM_1] and [PERSON_1]", {
+        "[CUSTOM_1]": "[PERSON_1]",
+        "[PERSON_1]": "Alice Rao",
+      })
+    ).toBe("[PERSON_1] and Alice Rao");
   });
 });

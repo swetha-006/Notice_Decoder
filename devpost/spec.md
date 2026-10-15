@@ -117,7 +117,7 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 - Implements: `prd.md > Notice Input & Sample Library`.
 
 ### `RedactionPreview`
-- What it does: Displays side-by-side or tabbed comparison of original notice vs. redacted text. Lists identified tokens (`[PERSON_1]`, `[PAN_1]`, etc.) with counts. Allows user to select unmasked words to redact them before proceeding.
+- What it does: Displays side-by-side or tabbed comparison of original notice vs. redacted text. Lists identified tokens (`[PERSON_1]`, `[PAN_1]`, etc.) with counts. Allows user to select unmasked words to redact them before proceeding. A best-effort scan reports residual identifier categories and counts without showing matched values, and blocks analysis until detected patterns are masked.
 - Implements: `prd.md > Client-Side Redaction & In-Memory Rehydration` and `prd.md > Explicit "What Will Be Sent" Preview`.
 
 ### `DocumentViewer`
@@ -362,3 +362,4 @@ Notice_Decoder/
 - Phase 1: Gemini model names are centralized in `/lib/config.ts`; API failures have classified, user-safe fallback reasons, and only model-unavailable failures advance to configured fallback models.
 - Phase 1: Scoring now exposes a documented breakdown, uses qualitative confidence, and prevents positive markers from offsetting hard-risk signals.
 - Phase 1: Rule checks now include credential requests, generic short deadlines, brand-named unallowlisted domains, personal-account transfer demands, and contextual UPI demand detection.
+- Phase 2: Redaction replacements use source spans in one pass, and restored token values are not rescanned. The outgoing-text gate remains best-effort and reports only category/count metadata.

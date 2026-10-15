@@ -122,6 +122,7 @@ export function RedactionPreview({
             value={customWord}
             onChange={(e) => setCustomWord(e.target.value)}
             placeholder="Type any word or number to mask manually..."
+            aria-label="Text to mask in the outgoing notice"
             className="flex-1 rounded border border-border bg-canvas-card px-3 py-1.5 text-xs text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none"
           />
           <button
@@ -146,10 +147,10 @@ export function RedactionPreview({
         </h3>
         {hasResidualFindings ? (
           <>
-            <p className="mt-1 text-xs text-ink-secondary">
+            <p id="privacy-scan-description" className="mt-1 text-xs text-ink-secondary">
               The scan found common identifier patterns in the masked text. It does not display their values here. Use the manual mask field above for each remaining item, then review the text again.
             </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-scam-text">
+            <ul id="privacy-scan-findings" className="mt-2 list-disc space-y-1 pl-5 text-xs text-scam-text">
               {residualFindings.map((finding) => (
                 <li key={finding.category}>
                   {finding.category}{finding.count > 1 ? ` (${finding.count} matches)` : ""}
@@ -158,7 +159,7 @@ export function RedactionPreview({
             </ul>
           </>
         ) : (
-          <p className="mt-1 text-xs text-ink-secondary">
+          <p id="privacy-scan-description" className="mt-1 text-xs text-ink-secondary">
             No common machine-readable identifier patterns were detected in the outgoing text. This is not a guarantee: names, addresses, and unusual identifiers may remain.
           </p>
         )}
@@ -224,7 +225,11 @@ export function RedactionPreview({
             id="confirm-analyze-btn"
             onClick={onConfirm}
             disabled={isAnalyzing || hasResidualFindings}
-            aria-describedby="privacy-scan-title"
+            aria-describedby={
+              hasResidualFindings
+                ? "privacy-scan-title privacy-scan-description privacy-scan-findings"
+                : "privacy-scan-title privacy-scan-description"
+            }
             className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover disabled:opacity-50"
           >
             {isAnalyzing ? (
