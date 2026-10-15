@@ -17,6 +17,7 @@ import { evaluateSignals } from "@/lib/signals";
 import { groundModelFlags, mergeAndDeDuplicateFlags, GroundedFlag } from "@/lib/grounding";
 import { calculateVerdict, ScoringResult } from "@/lib/scoring";
 import { AnalysisResponse } from "@/lib/schema";
+import { scanResidualSensitiveData } from "@/lib/privacy-scan";
 import { ArrowLeft, RefreshCw, ShieldAlert } from "lucide-react";
 
 export default function Home() {
@@ -61,10 +62,16 @@ export default function Home() {
       redactedText: updated.redactedText,
       tokenMap: updated.tokenMap,
     });
+    setErrorMessage(null);
   };
 
   const handleConfirmAnalyze = async () => {
     if (!redactionResult) return;
+    const residualFindings = scanResidualSensitiveData(redactionResult.redactedText);
+    if (residualFindings.length > 0) {
+      setErrorMessage("Possible personal identifiers remain in the outgoing text. Mask them and review the preview before analyzing.");
+      return;
+    }
     setIsAnalyzing(true);
     setErrorMessage(null);
 
@@ -271,7 +278,7 @@ export default function Home() {
             Notice Check · Privacy-First Administrative Verification Engine · Devpost Build With AI: Basics
           </p>
           <p className="mt-1 text-[11px] text-ink-muted">
-            All personal information is redacted on-device. No notice text or personal records are ever logged or stored.
+            Automatic masking is best-effort. Review the exact outgoing text; masked text is sent to this app and may be processed by Google Gemini when AI analysis is enabled. The app does not intentionally persist notice content.
           </p>
         </div>
       </footer>

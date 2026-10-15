@@ -15,7 +15,7 @@ An everyday citizen or small business owner who receives a tax demand, bank KYC 
 
 ## The Core Loop
 1. **Input**: User pastes the notice text or selects one of 6 built-in fictional sample letters.
-2. **Redact & Preview**: Pure TypeScript browser module detects and masks personal identifiers (names, phone numbers, emails, PAN, Aadhaar, account/IFSC numbers, PIN codes, addresses). The user reviews an explicit "This is exactly what will be sent" preview with manual masking options. Original PII never leaves the browser.
+2. **Redact & Preview**: Pure TypeScript browser module detects and masks personal identifiers (names, phone numbers, emails, PAN, Aadhaar, account/IFSC numbers, PIN codes, addresses). The user reviews the exact outgoing-text preview, runs a best-effort residual-identifier scan, and can manually mask additional terms. Only the displayed masked text is submitted; automatic detection can miss names, addresses, and unusual identifiers.
 3. **Analyze**: The server route invokes Google Gemini using structured JSON with a Zod schema, while the rule-based signal engine runs deterministic checks (UPI, threat words, lookalike domains, sender mismatches, deadline math).
 4. **Grounded Document Result**: The user sees a split-screen view: the original notice with exact verbatim trigger lines highlighted on one side, and the verdict (Likely genuine / Suspicious / Likely scam), plain-language summary, days-remaining deadline, urgency level (red/amber/green), official verification checklist, and locally rehydrated response draft in English, Tamil, or Hindi on the other.
 

@@ -345,7 +345,7 @@ Notice_Decoder/
 ## What Was Simplified and Why
 - **In-Memory Rate Limiting** instead of Redis / Upstash: Avoids external cloud accounts, setup complexity, and billing, keeping setup under 3 minutes for evaluators.
 - **Pure Regex/Heuristic Redaction** instead of client-side BERT / Spacy WASM: Keeps bundle size under 200KB, runs in sub-10ms with zero loading delay on mobile devices, and handles standard Indian identifiers (PAN, Aadhaar, Phone, Email) cleanly.
-- **Client-Side Rehydration** instead of server state: Zero database or session storage required. Preserves total privacy guarantee without compromising usability.
+- **Client-Side Rehydration** instead of server state: Zero database or session storage required. Keeps the token map in browser memory and avoids application-managed server persistence; heuristic redaction cannot guarantee that every identifier is detected.
 
 ## Decisions and Open Issues
 - **Free-Tier Model Choice**: Selected `gemini-2.0-flash` as the default model due to its speed, exceptional structured JSON following, and free tier availability, while allowing user override to `gemini-1.5-flash` via `GEMINI_MODEL`.

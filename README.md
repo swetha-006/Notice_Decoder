@@ -4,7 +4,7 @@
 
 A privacy-first, evidence-grounded verification engine for official-looking tax demands, bank freeze alerts, customs fees, and traffic e-challans.
 
-Built with Next.js (App Router), TypeScript (strict), Google Gemini (free tier), and pure in-browser cryptographic PII redaction for the **Devpost "Build With AI: Basics" Hackathon**.
+Built with Next.js (App Router), TypeScript (strict), Google Gemini (free tier), and pure in-browser heuristic PII redaction for the **Devpost "Build With AI: Basics" Hackathon**.
 
 ---
 
@@ -31,7 +31,7 @@ Notice Check operates on a **dual-engine, privacy-preserving architecture**:
 
 ```mermaid
 flowchart TD
-    subgraph Browser ["Client Browser (100% On-Device)"]
+    subgraph Browser ["Client Browser (original text and token map held in memory)"]
         UserText["User Notice Text / Fictional Samples"] --> Redactor["Pure TS Redaction Engine (lib/redact.ts)"]
         Redactor --> TokenMap["In-Memory Token Map<br/>[PERSON_1] -> Rajesh Kumar<br/>[PAN_1] -> ABCDE1234F"]
         Redactor --> PrivacyGate["Privacy Gate: 'What Will Be Sent' Preview"]
@@ -63,15 +63,18 @@ flowchart TD
 
 ## Privacy Model & Honest Limits
 
-### What We Guarantee
-- **Zero Raw PII Leaves the Device**: Names, emails, Indian mobile numbers, PAN numbers, Aadhaar IDs, and bank account numbers are replaced with tokens locally before the network request.
-- **Zero Database / Ephemeral Execution**: We maintain no database, cookies, or user tracking. Reloading the page clears the in-memory token map.
-- **Zero Request Body Logging**: Server route handlers never write notice contents to disk or server logs.
-- **Strict Evidence Grounding**: The system cannot alert on hallucinated text; all displayed highlights correspond to verbatim character offsets in the notice.
+### What the app does
+- **Local, best-effort redaction**: Common identifiers such as PAN-like values, phone numbers, emails, Aadhaar-style numbers, IFSC codes, and context-labelled account numbers are masked in the browser before submission.
+- **Outgoing-text preview and scan**: The preview shows the exact text that the app will submit and scans it for common residual identifier patterns. The scan is a safeguard, not a guarantee; it cannot reliably identify every name, address, or unusual identifier.
+- **In-memory token map**: Original values used for rehydrating draft replies stay in browser memory and are cleared when the page state is reset or the page is reloaded.
+- **No intentional application persistence**: The application code does not intentionally write notice text to a database or log request bodies. Hosting platforms and network infrastructure may process request metadata or maintain operational logs outside this application's control.
+- **Third-party model processing**: When Gemini analysis is enabled, the masked text shown in the preview is sent to Google's Gemini API. Do not submit content you are not comfortable sharing with the configured service, even after masking.
+- **Self-hosted assets and browser policy**: Interface fonts are served from this app rather than Google Fonts. A Content Security Policy restricts scripts, connections, fonts, images, frames, and form destinations to the app's required sources. Next.js hydration currently requires `unsafe-inline` in `script-src`; development additionally allows eval and local WebSocket connections for the dev server.
 
-### Honest Limits
-- **Heuristic Boundaries**: Automatic redaction is best-effort. Obscure nicknames or non-standard address formats might not match regex patterns. The UI provides an explicit "What will be sent" preview and a manual masking tool so users can redact additional terms before submission.
-- **Advisory Only**: Notice Check is an automated triage utility. It does not provide formal legal counsel or replace a licensed Chartered Accountant or advocate.
+### Honest limits
+- **Masking can miss data**: Regex and contextual rules may not detect a name, address, account identifier, or unusual formatting. Review the outgoing text and manually mask sensitive terms. The confirm button stays disabled while the residual scan detects supported high-confidence patterns.
+- **A clean scan is not a privacy guarantee**: The scan only covers common machine-readable patterns and does not prove that all identifying details have been removed.
+- **Advisory only**: Notice Check is an automated triage utility. It does not provide formal legal counsel or replace a licensed Chartered Accountant or advocate.
 
 ---
 
@@ -110,7 +113,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```bash
 npm test
 ```
-All 33 unit tests execute in under 2 seconds.
+Run the full Vitest suite with `npm test` to validate redaction, privacy scanning, signal rules, grounding, scoring, and deadline calculations.
 
 ---
 
@@ -132,7 +135,7 @@ All 33 unit tests execute in under 2 seconds.
 | Timestamp | Screen | Action | What to Notice |
 |---|---|---|---|
 | **00:00 - 00:15** | Input Screen | Select `tax-scam-upi.txt` sample card. Click **"Mask Personal Data & Review"**. | Notice input populated. Automatic tokenization runs locally in milliseconds. |
-| **00:15 - 00:30** | Privacy Gate | Show the side-by-side comparison: `Rajesh Kumar Sharma` masked to `[PERSON_1]`, PAN masked to `[PAN_1]`. Show privacy guarantee banner. | Proves original PII never touches the server. |
+| **00:15 - 00:30** | Privacy Gate | Show the side-by-side comparison: `Rajesh Kumar Sharma` masked to `[PERSON_1]`, PAN masked to `[PAN_1]`. Show the outgoing-text preview and residual identifier scan. | Demonstrates best-effort local masking and lets the reviewer inspect the exact outgoing text. |
 | **00:30 - 00:50** | Result Screen | Click **"Confirm & Analyze"**. Review the **"Likely Scam"** verdict, red urgency badge, and days-remaining counter. | Left panel highlights the personal UPI ID (`incometax-refund@okaxis`) and 24-hour arrest threat inline. Clicking highlights displays plain-language explanations. |
 | **00:50 - 01:10** | Multilingual & Rehydration | Toggle language to **Tamil (தமிழ்)** or **Hindi (हिन्दी)**. Inspect the drafted formal dispute letter. | Check that summary, checklist, and draft switch to clean Indic typography. The response letter has the real name and PAN restored locally! |
 | **01:10 - 01:30** | Genuine Notice Comparison | Click **"Check Another Notice"** and select `tax-genuine-143.txt`. Click through to analysis. | The verdict turns into a calm, green **"Likely Genuine"** banner with a verification checklist pointing to `incometax.gov.in`. |

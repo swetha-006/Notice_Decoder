@@ -25,7 +25,7 @@ export function Header() {
 
           <div className="flex items-center gap-2 self-start rounded-md border border-border bg-canvas-subtle px-3 py-1.5 text-xs font-medium text-ink-secondary sm:self-auto">
             <Lock className="h-3.5 w-3.5 text-genuine" aria-hidden="true" />
-            <span>Local privacy: PII is masked in your browser</span>
+            <span>Review masked text before sending</span>
           </div>
         </div>
       </div>

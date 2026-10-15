@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { ShieldCheck, Eye, EyeOff, Lock, Plus, ArrowRight, ArrowLeft } from "lucide-react";
 import { RedactionResult } from "@/lib/redact";
+import { scanResidualSensitiveData } from "@/lib/privacy-scan";
 
 interface RedactionPreviewProps {
   originalText: string;
@@ -33,21 +34,23 @@ export function RedactionPreview({
   };
 
   const entityCount = Object.keys(redactionResult.tokenMap).length;
+  const residualFindings = scanResidualSensitiveData(redactionResult.redactedText);
+  const hasResidualFindings = residualFindings.length > 0;
 
   return (
     <div className="rounded-lg border border-border bg-canvas-card p-6 shadow-sm">
-      {/* Header & Privacy Guarantee */}
+      {/* Header & Honest Privacy Copy */}
       <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-genuine-bg px-3 py-1 text-xs font-semibold text-genuine-text border border-genuine-border">
             <Lock className="h-3.5 w-3.5 text-genuine" />
-            <span>Privacy Gate — On-Device Redaction Complete</span>
+            <span>Privacy review — best-effort masking</span>
           </div>
           <h2 className="mt-2 font-serif text-xl font-bold text-ink sm:text-2xl">
             This is exactly what will be sent
           </h2>
-          <p className="mt-1 text-xs text-ink-secondary">
-            Your personal identifiers have been replaced with anonymous tokens inside your browser. Original values never leave your device.
+          <p className="mt-1 max-w-3xl text-xs text-ink-secondary">
+            Only the masked text shown below is submitted to this app. If Gemini analysis is enabled, that masked text is sent to Google for processing. Automatic masking can miss details, so review the outgoing text and mask anything sensitive before continuing.
           </p>
         </div>
 
@@ -132,6 +135,35 @@ export function RedactionPreview({
         </form>
       </div>
 
+      {/* Residual identifier scan */}
+      <section
+        aria-live="polite"
+        aria-labelledby="privacy-scan-title"
+        className={`mt-5 rounded-md border p-4 ${hasResidualFindings ? "border-scam-border bg-scam-bg" : "border-border bg-canvas-subtle"}`}
+      >
+        <h3 id="privacy-scan-title" className="text-sm font-semibold text-ink">
+          {hasResidualFindings ? "Review needed: possible identifiers remain" : "Outgoing-text scan"}
+        </h3>
+        {hasResidualFindings ? (
+          <>
+            <p className="mt-1 text-xs text-ink-secondary">
+              The scan found common identifier patterns in the masked text. It does not display their values here. Use the manual mask field above for each remaining item, then review the text again.
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-scam-text">
+              {residualFindings.map((finding) => (
+                <li key={finding.category}>
+                  {finding.category}{finding.count > 1 ? ` (${finding.count} matches)` : ""}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="mt-1 text-xs text-ink-secondary">
+            No common machine-readable identifier patterns were detected in the outgoing text. This is not a guarantee: names, addresses, and unusual identifiers may remain.
+          </p>
+        )}
+      </section>
+
       {/* Comparison View */}
       <div className="mt-5">
         {activeTab === "sideBySide" ? (
@@ -152,7 +184,7 @@ export function RedactionPreview({
                 <span className="text-xs font-semibold uppercase tracking-wider text-accent">
                   Masked Text (Transmitted for Analysis)
                 </span>
-                <span className="font-mono text-xs text-genuine font-medium">Safe to Transmit</span>
+                <span className="font-mono text-xs text-ink-muted font-medium">Outgoing text</span>
               </div>
               <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap font-sans text-xs text-ink leading-relaxed">
                 {redactionResult.redactedText}
@@ -165,7 +197,7 @@ export function RedactionPreview({
               <span className="text-xs font-semibold uppercase tracking-wider text-accent">
                 Masked Text (Transmitted for Analysis)
               </span>
-              <span className="font-mono text-xs text-genuine font-medium">Safe to Transmit</span>
+              <span className="font-mono text-xs text-ink-muted font-medium">Outgoing text</span>
             </div>
             <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm text-ink leading-relaxed">
               {redactionResult.redactedText}
@@ -191,7 +223,8 @@ export function RedactionPreview({
             type="button"
             id="confirm-analyze-btn"
             onClick={onConfirm}
-            disabled={isAnalyzing}
+            disabled={isAnalyzing || hasResidualFindings}
+            aria-describedby="privacy-scan-title"
             className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover disabled:opacity-50"
           >
             {isAnalyzing ? (
@@ -199,7 +232,7 @@ export function RedactionPreview({
             ) : (
               <>
                 <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                <span>Confirm & Analyze Masked Notice</span>
+                <span>{hasResidualFindings ? "Mask Remaining Identifiers First" : "Confirm & Analyze Masked Notice"}</span>
                 <ArrowRight className="h-4 w-4" />
               </>
             )}

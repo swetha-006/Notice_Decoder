@@ -1,4 +1,90 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Noto+Sans+Devanagari:wght@400;500;600&family=Noto+Sans+Tamil:wght@400;500;600&display=swap");
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-medium.otf") format("opentype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-semibold.otf") format("opentype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-bold.otf") format("opentype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Serif Local";
+  src: url("/fonts/noto-serif-regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Serif Local";
+  src: url("/fonts/noto-serif-semibold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Serif Local";
+  src: url("/fonts/noto-serif-bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans Tamil Local";
+  src: url("/fonts/noto-sans-tamil-regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans Tamil Local";
+  src: url("/fonts/noto-sans-tamil-semibold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans Devanagari Local";
+  src: url("/fonts/noto-sans-devanagari-regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans Devanagari Local";
+  src: url("/fonts/noto-sans-devanagari-semibold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
 
 @tailwind base;
 @tailwind components;
@@ -15,7 +101,7 @@
 body {
   background-color: var(--canvas-bg);
   color: var(--text-main);
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Tamil", "Noto Sans Devanagari", sans-serif;
+  font-family: Inter, "Noto Sans Tamil Local", "Noto Sans Devanagari Local", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -39,9 +125,7 @@ body {
   transition: background-color 0.15s ease;
 }
 
-.highlight-scam:hover {
-  background-color: #FCA5A5;
-}
+.highlight-scam:hover { background-color: #FCA5A5; }
 
 .highlight-suspicious {
   background-color: #FDE68A;
@@ -54,9 +138,7 @@ body {
   transition: background-color 0.15s ease;
 }
 
-.highlight-suspicious:hover {
-  background-color: #FCD34D;
-}
+.highlight-suspicious:hover { background-color: #FCD34D; }
 
 .highlight-genuine {
   background-color: #BBF7D0;
@@ -80,37 +162,11 @@ body {
   font-weight: 600;
 }
 
-/* High-End Clean Print Stylesheet for PDF Export */
 @media print {
-  body {
-    background: #FFFFFF !important;
-    color: #000000 !important;
-    font-size: 11pt !important;
-  }
-
-  header,
-  footer,
-  .no-print,
-  button {
-    display: none !important;
-  }
-
-  .print-only {
-    display: block !important;
-  }
-
-  .shadow-sm,
-  .shadow-xs,
-  .shadow-md {
-    box-shadow: none !important;
-  }
-
-  .border,
-  .border-2 {
-    border-color: #CCCCCC !important;
-  }
-
-  .page-break {
-    page-break-before: always;
-  }
+  body { background: #FFFFFF !important; color: #000000 !important; font-size: 11pt !important; }
+  header, footer, .no-print, button { display: none !important; }
+  .print-only { display: block !important; }
+  .shadow-sm, .shadow-xs, .shadow-md { box-shadow: none !important; }
+  .border, .border-2 { border-color: #CCCCCC !important; }
+  .page-break { page-break-before: always; }
 }

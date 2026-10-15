@@ -11,12 +11,12 @@ Build mode: fast
 
 - [x] **1. Scaffold Next.js app with in-browser privacy redactor and rehydration**
   Becomes usable: Running Next.js app with editorial styling where a user can paste notice text, see automatic detection and masking of personal identifiers (names, phones, emails, PAN, Aadhaar, accounts, IFSC, PIN codes), view the explicit "what will be sent" preview with manual masking toggles, and test client-side rehydration.
-  Why now: The privacy redactor is the core privacy guarantee and the entry gate for all text processing. Putting it in slice 1 ensures raw personal data never leaves the client from the very first working step.
+  Why now: The privacy redactor is the core privacy guarantee and the entry gate for all text processing. Putting it in slice 1 keeps detection and token mapping local, while a preview and residual scan help users review the exact outgoing payload. Detection remains best-effort.
   PRD ref: `prd.md > Notice Input & Sample Library`, `prd.md > Client-Side Redaction & In-Memory Rehydration`
   Spec ref: `spec.md > Stack`, `spec.md > Components > NoticeInput`, `spec.md > Components > RedactionPreview`, `spec.md > Data Model > Redaction Token Map`
   Build: Initialize Next.js project with TypeScript (strict), Tailwind CSS, Lucide icons, Vitest, and Zod. Implement `/lib/redact.ts` with regex and heuristics for Indian and international formats, token mapping, and `rehydrate()`. Build `NoticeInput` and `RedactionPreview` components. Add unit tests in `tests/redact.test.ts`.
   Verify (mechanical): Run `npx vitest run tests/redact.test.ts` to confirm 100% test pass on PII tokenization and rehydration. Run `npm run build` or `npx next build` to confirm zero compilation errors.
-  Learner check: Start dev server, open `http://localhost:3000`, paste a notice containing a name, PAN, and phone number, and confirm the tokens `[PERSON_1]`, `[PAN_1]`, `[PHONE_1]` appear with the privacy guarantee banner.
+  Learner check: Start dev server, open `http://localhost:3000`, paste a notice containing a name, PAN, and phone number, and confirm the tokens `[PERSON_1]`, `[PAN_1]`, `[PHONE_1]` appear with the outgoing-text preview and best-effort warning.
   Commit: `feat: scaffold Next.js app with in-browser privacy redactor and test suite`
 
 - [x] **2. Deterministic rule-based fraud signal engine and deadline calculation**

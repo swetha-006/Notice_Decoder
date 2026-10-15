@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Notice Check — Check Official Notices Before You Panic or Pay",
   description:
-    "Instant, private verification for official-looking tax, bank, customs, and fine notices. Personal data stays masked in your browser.",
+    "Best-effort local masking and evidence-based checks for official-looking tax, bank, customs, and fine notices. Review masked text before submitting it for analysis.",
   keywords: [
     "Notice Check",
     "Income Tax Scam Check",

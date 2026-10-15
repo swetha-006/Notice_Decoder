@@ -1,32 +1,100 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
 import { AnalyzeRequestSchema, AnalysisResponseSchema, AnalysisResponse } from "@/lib/schema";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { evaluateSignals } from "@/lib/signals";
 
 export const runtime = "nodejs";
 
-const localizedTextResponseSchema = {
-  type: SchemaType.OBJECT as const,
-  properties: { en: { type: SchemaType.STRING as const }, ta: { type: SchemaType.STRING as const }, hi: { type: SchemaType.STRING as const } },
+const localizedTextResponseSchema: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    en: { type: SchemaType.STRING },
+    ta: { type: SchemaType.STRING },
+    hi: { type: SchemaType.STRING },
+  },
   required: ["en", "ta", "hi"],
 };
 
-const MODEL_RESPONSE_SCHEMA = {
-  type: SchemaType.OBJECT as const,
+const MODEL_RESPONSE_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
   properties: {
-    noticeType: { type: SchemaType.STRING as const },
-    issuingAuthorityClaimed: { type: SchemaType.STRING as const },
-    verdict: { type: SchemaType.STRING as const, enum: ["likely_genuine", "suspicious", "likely_scam"] },
-    confidenceScore: { type: SchemaType.NUMBER as const },
+    noticeType: { type: SchemaType.STRING },
+    issuingAuthorityClaimed: { type: SchemaType.STRING },
+    verdict: {
+      type: SchemaType.STRING,
+      format: "enum",
+      enum: ["likely_genuine", "suspicious", "likely_scam"],
+    },
+    confidenceScore: { type: SchemaType.NUMBER },
     oneSentenceReason: localizedTextResponseSchema,
-    urgencyLevel: { type: SchemaType.STRING as const, enum: ["low", "medium", "high"] },
-    summary: { type: SchemaType.OBJECT as const, properties: { whatThisIs: localizedTextResponseSchema, whatItDemands: localizedTextResponseSchema, consequenceIfIgnored: localizedTextResponseSchema }, required: ["whatThisIs", "whatItDemands", "consequenceIfIgnored"] },
-    flags: { type: SchemaType.ARRAY as const, items: { type: SchemaType.OBJECT as const, properties: { quote: { type: SchemaType.STRING as const }, category: { type: SchemaType.STRING as const, enum: ["suspicious_demand", "threat_or_coercion", "unverified_contact", "procedural_anomaly", "official_marker"] }, severity: { type: SchemaType.STRING as const, enum: ["critical", "warning", "info", "positive"] }, explanation: localizedTextResponseSchema }, required: ["quote", "category", "severity", "explanation"] } },
-    checklist: { type: SchemaType.ARRAY as const, items: { type: SchemaType.OBJECT as const, properties: { step: { type: SchemaType.NUMBER as const }, action: localizedTextResponseSchema, isOfficialChannel: { type: SchemaType.BOOLEAN as const } }, required: ["step", "action", "isOfficialChannel"] } },
+    urgencyLevel: {
+      type: SchemaType.STRING,
+      format: "enum",
+      enum: ["low", "medium", "high"],
+    },
+    summary: {
+      type: SchemaType.OBJECT,
+      properties: {
+        whatThisIs: localizedTextResponseSchema,
+        whatItDemands: localizedTextResponseSchema,
+        consequenceIfIgnored: localizedTextResponseSchema,
+      },
+      required: ["whatThisIs", "whatItDemands", "consequenceIfIgnored"],
+    },
+    flags: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          quote: { type: SchemaType.STRING },
+          category: {
+            type: SchemaType.STRING,
+            format: "enum",
+            enum: [
+              "suspicious_demand",
+              "threat_or_coercion",
+              "unverified_contact",
+              "procedural_anomaly",
+              "official_marker",
+            ],
+          },
+          severity: {
+            type: SchemaType.STRING,
+            format: "enum",
+            enum: ["critical", "warning", "info", "positive"],
+          },
+          explanation: localizedTextResponseSchema,
+        },
+        required: ["quote", "category", "severity", "explanation"],
+      },
+    },
+    checklist: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          step: { type: SchemaType.NUMBER },
+          action: localizedTextResponseSchema,
+          isOfficialChannel: { type: SchemaType.BOOLEAN },
+        },
+        required: ["step", "action", "isOfficialChannel"],
+      },
+    },
     draftReply: localizedTextResponseSchema,
   },
-  required: ["noticeType", "issuingAuthorityClaimed", "verdict", "confidenceScore", "oneSentenceReason", "urgencyLevel", "summary", "flags", "checklist", "draftReply"],
+  required: [
+    "noticeType",
+    "issuingAuthorityClaimed",
+    "verdict",
+    "confidenceScore",
+    "oneSentenceReason",
+    "urgencyLevel",
+    "summary",
+    "flags",
+    "checklist",
+    "draftReply",
+  ],
 };
 
 const SYSTEM_INSTRUCTION = `
