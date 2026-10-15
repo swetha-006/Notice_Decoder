@@ -14,7 +14,7 @@ When the user confirms, the masked text is evaluated in two parallel ways:
 1. **A deterministic rule engine** (running in pure TypeScript) inspects the notice for known fraud patterns: non-governmental payment destinations (UPI IDs, cryptocurrency wallets, gift cards), coercive threat language ("arrest warrant", "within 24 hours"), lookalike domains (e.g. `incometax-gov.in` instead of `incometax.gov.in`), sender mismatches (tax notices from Gmail addresses), and calculation of response deadlines.
 2. **A server route** (`/api/analyze`) sends the masked text to the Google Gemini API (using a model configured via environment variable, such as `gemini-2.0-flash` or `gemini-1.5-flash`) demanding structured JSON verified against a strict Zod schema.
 
-Before showing anything to the user, an **Evidence Grounding Engine** cross-checks every single claim or quote returned by the model against the submitted notice text. If the model quotes something that isn't verbatim in the letter (accounting for normalized whitespace), that flag is immediately discarded.
+Before showing anything to the user, an **Evidence Grounding Engine** rehydrates redaction placeholders in each model quote locally, then cross-checks each quote against the original notice text. If the model quotes something that isn't verbatim in the letter (accounting for normalized whitespace), that flag is immediately discarded.
 
 Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the verified model flags and the rule engine signals. It assigns a clear verdict (**Likely genuine**, **Suspicious**, or **Likely scam**), an urgency level (red/amber/green), and a days-remaining countdown. The browser re-hydrates any drafted response with the user's real personal details locally so they can copy and send it, and renders everything in English, Tamil, or Hindi.
 
@@ -124,7 +124,7 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 - Implements: `prd.md > Side-by-Side Document Review` and `prd.md > Verbatim Evidence Highlighting & Grounding`.
 
 ### `VerdictCard`
-- What it does: Displays the final consolidated verdict (**Likely genuine**, **Suspicious**, or **Likely scam**), confidence score (0–100%), urgency level badge (Red / Amber / Green), days-remaining counter, and one-sentence justification.
+- What it does: Displays the final consolidated verdict (**Likely genuine**, **Suspicious**, or **Likely scam**), qualitative confidence level (high / medium / low), urgency level badge (Red / Amber / Green), days-remaining counter, and one-sentence justification.
 - Implements: `prd.md > Deterministic Scoring Function` and `prd.md > Side-by-Side Document Review`.
 
 ### `SummarySection`
@@ -334,7 +334,7 @@ Notice_Decoder/
 
 ## Important Failure Modes
 1. **Gemini API Key Missing or Invalid**:
-   - Fallback: The API route detects missing/unauthorized key and falls back to a 100% deterministic rule-based analysis. The UI displays an informative banner: *"Running in offline rule-based mode (AI key not configured)."*
+   - Fallback: Missing keys or model failures return `source: "rules_only"`. The UI displays “Rule-based check only - AI analysis unavailable” and hides model-dependent summary and reply content.
 2. **Model Returns Malformed JSON or Hallucinated Schema**:
    - Fallback: The route catches Zod validation errors, retries the request once with a corrective prompt. If validation fails again, it gracefully constructs a valid analysis from the rule engine findings and informs the user.
 3. **Model Quotes Hallucinated Text**:
@@ -345,10 +345,18 @@ Notice_Decoder/
 ## What Was Simplified and Why
 - **In-Memory Rate Limiting** instead of Redis / Upstash: Avoids external cloud accounts, setup complexity, and billing, keeping setup under 3 minutes for evaluators.
 - **Pure Regex/Heuristic Redaction** instead of client-side BERT / Spacy WASM: Keeps bundle size under 200KB, runs in sub-10ms with zero loading delay on mobile devices, and handles standard Indian identifiers (PAN, Aadhaar, Phone, Email) cleanly.
-- **Client-Side Rehydration** instead of server state: Zero database or session storage required. Keeps the token map in browser memory and avoids application-managed server persistence; it does not guarantee that heuristic redaction catches every identifier.
+- **Client-Side Rehydration** instead of server state: Zero database or session storage required. Keeps the token map in browser memory and avoids application-managed server persistence; heuristic redaction cannot guarantee that every identifier is detected.
 
 ## Decisions and Open Issues
 - **Free-Tier Model Choice**: Selected `gemini-2.0-flash` as the default model due to its speed, exceptional structured JSON following, and free tier availability, while allowing user override to `gemini-1.5-flash` via `GEMINI_MODEL`.
 - **Edit Distance Threshold**: Set Levenshtein distance `<= 2` on lookalike domain detection against the allowlist (`incometax.gov.in`, `parivahan.gov.in`, `sbi.co.in`, etc.) to reliably catch fraudulent typosquatting domains.
 - **Tamil and Hindi Localization**: Model outputs multi-lingual content directly in a single pass to minimize latency and token usage.
 - All consequential technical decisions are agreed upon and documented.
+
+
+## Changes after review
+- Phase 1: Added a Gemini `responseSchema` contract alongside Zod validation and preserved one retry for invalid output.
+- Phase 1: API responses identify model vs rules-only output; the UI discloses rules-only mode and avoids presenting model-dependent content as if it were generated.
+- Phase 1: Grounding rehydrates placeholder tokens locally before matching quotes to the original notice.
+- Phase 1: Scoring now exposes a documented breakdown, uses qualitative confidence, and prevents positive markers from offsetting hard-risk signals.
+- Phase 1: Rule checks now include credential requests, generic short deadlines, brand-named unallowlisted domains, personal-account transfer demands, and contextual UPI demand detection.

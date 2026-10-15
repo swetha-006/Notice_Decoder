@@ -146,11 +146,11 @@ Run the full Vitest suite with `npm test` to validate redaction, privacy scannin
 
 This project was built following the **Devpost Learn Skill Pack** (`challengepost/learn-ai-basics`):
 
-1. **`1-start`**: Established the learner profile ([devpost/learner-profile.md](file:///f:/Notice_Decoder/devpost/learner-profile.md)), verified a clean workspace, configured git, and added privacy exclusions to `.gitignore`.
-2. **`2-scope`**: Defined the unique kernel (local privacy redaction + dual-engine signal grounding) and established proof-of-concept boundaries ([scope.md](file:///f:/Notice_Decoder/scope.md)).
-3. **`3-prd`**: Specified the end-to-end user journey, behavioral requirements, states, and accessibility standards ([prd.md](file:///f:/Notice_Decoder/prd.md)).
-4. **`4-spec`**: Created the technical blueprint covering Next.js App Router architecture, Zod schema contracts, Levenshtein domain checks, and testing requirements ([spec.md](file:///f:/Notice_Decoder/spec.md)).
-5. **`5-build`**: Executed ordered end-to-end build slices, verified every step mechanically with unit tests and builds, and committed with clear semantic messages ([devpost/checklist.md](file:///f:/Notice_Decoder/devpost/checklist.md)).
+1. **`1-start`**: Established a local learner profile, verified a clean workspace, configured git, and added privacy exclusions to `.gitignore`. The learner profile remains local and gitignored.
+2. **`2-scope`**: Defined the unique kernel (local privacy redaction + dual-engine signal grounding) and established proof-of-concept boundaries ([scope.md](./devpost/scope.md)).
+3. **`3-prd`**: Specified the end-to-end user journey, behavioral requirements, states, and accessibility standards ([prd.md](./devpost/prd.md)).
+4. **`4-spec`**: Created the technical blueprint covering Next.js App Router architecture, Zod schema contracts, Levenshtein domain checks, and testing requirements ([spec.md](./devpost/spec.md)).
+5. **`5-build`**: Executed ordered end-to-end build slices, verified every step mechanically with unit tests and builds, and committed with clear semantic messages ([checklist.md](./devpost/checklist.md)).
 6. **`6-ship`**: Prepared public repository readiness, deployment documentation, and submission checklists.
 
 ---

@@ -4,7 +4,6 @@ export interface SampleNotice {
   type: "scam" | "genuine";
   category: "tax" | "bank" | "customs" | "traffic";
   subtitle: string;
-  sourceFile: string;
   content: string;
 }
 
@@ -15,7 +14,6 @@ export const SAMPLES: SampleNotice[] = [
     type: "scam",
     category: "tax",
     subtitle: "Threatens arrest, demands personal UPI & links to lookalike domain",
-    sourceFile: "samples/tax-scam-upi.txt",
     content: `[SAMPLE NOTICE — FICTIONAL FOR DEMONSTRATION ONLY]
 GOVERNMENT OF INDIA - INCOME TAX DEPARTMENT
 OFFICE OF THE TAX RECOVERY OFFICER, CIRCLE 12(1), NEW DELHI
@@ -55,7 +53,6 @@ Recovery Officer, Tax Collection Wing`,
     type: "genuine",
     category: "tax",
     subtitle: "Authentic intimation with valid DIN & incometax.gov.in guidance",
-    sourceFile: "samples/tax-genuine-143.txt",
     content: `[SAMPLE NOTICE — FICTIONAL FOR DEMONSTRATION ONLY]
 INCOME TAX DEPARTMENT - GOVERNMENT OF INDIA
 CENTRALIZED PROCESSING CENTRE, BENGALURU 560500
@@ -99,7 +96,6 @@ Email: notification@cpc.incometax.gov.in`,
     type: "scam",
     category: "bank",
     subtitle: "Urgent 12-hour freeze threat demanding unverified link update",
-    sourceFile: "samples/bank-kyc-scam.txt",
     content: `[SAMPLE NOTICE — FICTIONAL FOR DEMONSTRATION ONLY]
 STATE BANK OF INDIA - URGENT SECURITY ALERT
 SMS / NOTICE REFERENCE: SBI/KYC/URGENT/2026/4102
@@ -127,7 +123,6 @@ Helpdesk Email: sbikyc.support@yahoo.co.in`,
     type: "scam",
     category: "customs",
     subtitle: "Fake foreign contraband seizure demanding personal bank transfer",
-    sourceFile: "samples/courier-customs.txt",
     content: `[SAMPLE NOTICE — FICTIONAL FOR DEMONSTRATION ONLY]
 INDIA POST INTERNATIONAL COURIER & CUSTOMS CLEARANCE WING
 INDIRA GANDHI INTERNATIONAL AIRPORT CARGO COMPLEX, NEW DELHI
@@ -168,7 +163,6 @@ Email: airport.customs.clearance@gmail.com`,
     type: "scam",
     category: "traffic",
     subtitle: "Fake speeding fine with shortened bit.ly & lookalike links",
-    sourceFile: "samples/echallan-scam.txt",
     content: `[SAMPLE NOTICE — FICTIONAL FOR DEMONSTRATION ONLY]
 DELHI TRAFFIC POLICE - E-CHALLAN ENFORCEMENT WING
 MoRTH AUTOMATED SURVEILLANCE NOTIFICATION
@@ -201,7 +195,6 @@ Support: challan.delhipolice@outlook.com`,
     type: "genuine",
     category: "bank",
     subtitle: "Legitimate customer advisory linking to official onlinesbi.sbi portal",
-    sourceFile: "samples/bank-genuine.txt",
     content: `[SAMPLE NOTICE — FICTIONAL FOR DEMONSTRATION ONLY]
 STATE BANK OF INDIA - PERIODIC CUSTOMER INFORMATION UPDATE
 BRANCH: KORAMANGALA, BENGALURU | IFSC: SBIN0007890

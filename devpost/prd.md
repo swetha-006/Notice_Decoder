@@ -17,7 +17,7 @@ Source: `scope.md > The Unique Kernel`.
 6. **Side-by-Side Document Review**:
    - **Left Panel (Document View)**: The original notice is rendered with exact trigger lines highlighted in semantic colors (red for scam indicators, amber for suspicious traits, green/neutral for standard administrative language). Hovering or clicking a highlight shows the plain-language explanation.
    - **Right Panel (Action & Verdict View)**:
-     - Prominent verdict banner: **Likely genuine**, **Suspicious**, or **Likely scam**, with a confidence score and a single explanatory sentence.
+     - Prominent verdict banner: **Likely genuine**, **Suspicious**, or **Likely scam**, with a high / medium / low confidence level and a single explanatory sentence. When model and grounded/rule signals disagree, show “Verify before acting.”
      - Urgency badge (Red / Amber / Green) with a calculated **Days Remaining** countdown.
      - Plain-language summary answering: What is this? What does it demand? What happens if ignored?
      - Step-by-step "What To Do Next" checklist, prominently featuring official verification pathways (e.g. verifying DIN on `incometax.gov.in`).
@@ -102,11 +102,12 @@ Pure TypeScript module running deterministically:
   - Draft response: A formal letter template tailored to either dispute a scam demand or comply with a genuine request.
   - Multi-lingual translations for English, Tamil, and Hindi.
 - **Evidence Grounding Engine**:
-  - Every quote returned by the model is verified against the submitted text using whitespace-normalized substring search.
+  - Every quote returned by the model is locally rehydrated from placeholders and verified against the original notice text using whitespace-normalized substring search.
   - Any model flag failing verbatim quote matching is discarded immediately.
   - Validated model flags and rule-based signal flags are merged, removing duplicates and computing exact start/end character offsets for UI rendering.
 
 ### Deterministic Scoring Function (`/lib/scoring.ts`)
+The UI exposes the scoring breakdown under “Why this verdict”. Official-domain and statutory-positive markers cannot offset coercion, credential requests, or payment-demand signals.
 The final verdict is not simply the model's opinion. A deterministic algorithm weighs:
 - Scam disqualifiers (e.g., UPI payment demand on a tax notice = automatic **Likely scam**).
 - Critical rule hits (lookalike domain, threat of arrest, free email sender).
@@ -164,3 +165,10 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 
 ## Open Questions
 - None blocking specification. All behavioral criteria, acceptance criteria, and edge cases are specified.
+
+
+## Changes after review
+- Phase 1: Gemini receives an explicit response schema in addition to Zod validation; the one-retry policy remains.
+- Phase 1: The API response identifies `source` as `model` or `rules_only`. Rules-only results show a clear limitation banner and use generic guidance rather than presenting a model-generated summary or reply.
+- Phase 1: Model quotes containing redaction tokens are rehydrated locally before grounding against the original notice.
+- Phase 1: Confidence is a qualitative high / medium / low level based on signal agreement, and the UI shows the scoring breakdown. Positive markers cannot offset hard-risk signals.
