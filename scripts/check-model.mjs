@@ -69,7 +69,19 @@ async function requestGroq(candidate) {
           { role: "system", content: 'Return only the JSON object {"ok":true}.' },
           { role: "user", content: 'Return exactly {"ok":true}.' },
         ],
-        response_format: { type: "json_object" },
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "health_check",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: { ok: { type: "boolean" } },
+              required: ["ok"],
+              additionalProperties: false,
+            },
+          },
+        },
         temperature: 0,
       }),
       signal: controller.signal,
@@ -127,7 +139,6 @@ function classifyFailure(error) {
   if (status === 401 || status === 403 || /invalid api key|unauthorized|permission denied/.test(message)) return "auth";
   if (status === 429 || /quota|resource exhausted|rate limit/.test(message)) return "quota";
   if (
-    status === 400 ||
     status === 404 ||
     /model.{0,40}(not found|unavailable|not supported)/.test(message)
   ) {

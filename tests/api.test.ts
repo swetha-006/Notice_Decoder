@@ -239,10 +239,32 @@ describe("API Route Validation & Rate Limiting (lib/rate-limit.ts & lib/schema.t
         headers: expect.objectContaining({
           Authorization: "Bearer groq-test-key",
         }),
-        body: expect.stringContaining('"model":"groq-test-model"'),
+        body: expect.stringMatching(/"model":"groq-test-model".*"strict":true/),
       })
     );
     expect(geminiMocks.generateContent).not.toHaveBeenCalled();
+  });
+
+  it("retries Groq in JSON-object mode when strict schema mode is rejected", async () => {
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 400 }))
+      .mockResolvedValueOnce(
+        Response.json({ choices: [{ message: { content: validModelResponse() } }] })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await postAnalyze();
+    const data = await response.json();
+    const compatibilityRequest = JSON.parse(fetchMock.mock.calls[1][1].body);
+
+    expect(response.status).toBe(200);
+    expect(data.source).toBe("model");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(compatibilityRequest.response_format).toEqual({ type: "json_object" });
+    expect(compatibilityRequest.messages[0].content).toContain('"additionalProperties":false');
   });
 
   it("falls back from a Groq provider failure to Gemini", async () => {
@@ -262,6 +284,24 @@ describe("API Route Validation & Rate Limiting (lib/rate-limit.ts & lib/schema.t
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(geminiMocks.generateContent).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(data)).not.toContain("private provider diagnostic");
+  });
+
+  it("does not mislabel a Groq bad request as an unavailable model", async () => {
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("private invalid request details", { status: 400 })
+      )
+    );
+
+    const response = await postAnalyze();
+    const data = await response.json();
+
+    expect(data.source).toBe("rules_only");
+    expect(data.fallbackReason).toBe("unknown");
+    expect(JSON.stringify(data)).not.toContain("private invalid request details");
   });
 
   it("retries Groq output that fails the shared response schema", async () => {

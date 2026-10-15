@@ -12,7 +12,7 @@ Before anything leaves the computer, the user inspects an exact preview of what 
 
 When the user confirms, the masked text is evaluated in two parallel ways:
 1. **A deterministic rule engine** (running in pure TypeScript) inspects the notice for known fraud patterns: non-governmental payment destinations (UPI IDs, cryptocurrency wallets, gift cards), coercive threat language ("arrest warrant", "within 24 hours"), lookalike domains (e.g. `incometax-gov.in` instead of `incometax.gov.in`), sender mismatches (tax notices from Gmail addresses), and calculation of response deadlines.
-2. **A server route** (`/api/analyze`) sends the masked text to Groq first when `GROQ_API_KEY` is configured, then tries configured Gemini models when available. Provider output is verified against a strict Zod schema.
+2. **A server route** (`/api/analyze`) sends the masked text to Groq first when `GROQ_API_KEY` is configured, then tries configured Gemini models when available. Groq is asked for strict JSON Schema output; if the provider rejects that request format, the route retries in JSON-object mode with the schema included in its instructions. Every provider response is verified against the same strict Zod schema.
 
 Before showing anything to the user, an **Evidence Grounding Engine** rehydrates redaction placeholders in each model quote locally, then cross-checks each quote against the original notice text. If the model quotes something that isn't verbatim in the letter (accounting for normalized whitespace), that flag is immediately discarded.
 
@@ -335,7 +335,7 @@ Notice_Decoder/
   - Endpoint: `https://api.groq.com/openai/v1/chat/completions`.
   - Model: `GROQ_MODEL` from `/lib/config.ts` (default `openai/gpt-oss-20b`).
   - Auth: `GROQ_API_KEY` passed as a server-side bearer token.
-  - Output: JSON object mode, then locally validated against `AnalysisResponseSchema`.
+  - Output: Strict JSON Schema mode, then locally validated against `AnalysisResponseSchema`.
   - Availability, free-tier quotas, and model access depend on the user's Groq account and may change.
   - Documentation: [console.groq.com/docs](https://console.groq.com/docs)
 - **Google AI Studio Gemini API (fallback when configured)**:
@@ -352,6 +352,7 @@ Notice_Decoder/
 1. **Provider Key Missing, Invalid, or Unavailable**:
    - Fallback: Groq is tried first, followed by configured Gemini models. If no model succeeds, the response has `source: "rules_only"` and a classified `fallbackReason`; the UI displays a reason-specific message and avoids presenting model-dependent content as generated.
    - A rules-only notice without positive official-domain evidence is Suspicious and requires independent verification; no-match rules do not imply authenticity.
+   - If Groq rejects strict JSON Schema mode with HTTP 400, the route retries once using JSON-object mode and the schema in the system instructions. Output still must pass the shared Zod validation before it is used.
 2. **Model Returns Malformed JSON or Hallucinated Schema**:
    - Fallback: The route catches Zod validation errors, retries the request once with a corrective prompt. If validation fails again, it gracefully constructs a valid analysis from the rule engine findings and informs the user.
 3. **Model Quotes Hallucinated Text**:
