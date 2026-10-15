@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "check:model": "node scripts/check-model.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

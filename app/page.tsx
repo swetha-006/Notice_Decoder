@@ -7,18 +7,32 @@ import { SampleSelector } from "@/components/SampleSelector";
 import { RedactionPreview } from "@/components/RedactionPreview";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { VerdictCard } from "@/components/VerdictCard";
-import { SummarySection } from "@/components/SummarySection";
-import { ChecklistSection } from "@/components/ChecklistSection";
-import { ResponseDraft } from "@/components/ResponseDraft";
+import { VerdictAdvice } from "@/components/VerdictAdvice";
 import { LanguageSwitcher, Language } from "@/components/LanguageSwitcher";
 import { SampleNotice } from "@/samples";
 import { redactNotice, manualMask, RedactionResult } from "@/lib/redact";
 import { evaluateSignals } from "@/lib/signals";
 import { groundModelFlags, mergeAndDeDuplicateFlags, GroundedFlag } from "@/lib/grounding";
 import { calculateVerdict, ScoringResult } from "@/lib/scoring";
-import { AnalysisResponse } from "@/lib/schema";
+import { AnalysisResponse, FallbackReason } from "@/lib/schema";
 import { scanResidualSensitiveData } from "@/lib/privacy-scan";
 import { ArrowLeft, RefreshCw, ShieldAlert } from "lucide-react";
+
+type AnalysisApiResponse = AnalysisResponse &
+  (
+    | { source: "model"; fallbackReason?: never }
+    | { source: "rules_only"; fallbackReason: FallbackReason }
+  );
+
+const FALLBACK_MESSAGES: Record<FallbackReason, string> = {
+  missing_key: "AI analysis is not configured. Showing rule-based results only.",
+  auth: "AI analysis could not authenticate. Showing rule-based results only.",
+  model_unavailable: "The selected AI model is unavailable. Showing rule-based results only.",
+  quota: "AI analysis has reached its current quota. Showing rule-based results only.",
+  timeout: "AI analysis timed out. Showing rule-based results only.",
+  invalid_output: "AI analysis returned an unusable response. Showing rule-based results only.",
+  unknown: "AI analysis is temporarily unavailable. Showing rule-based results only.",
+};
 
 export default function Home() {
   const [currentStep, setCurrentStep] = useState<"input" | "redaction" | "result">("input");
@@ -32,7 +46,7 @@ export default function Home() {
   // Analysis Result State
   const [groundedFlags, setGroundedFlags] = useState<GroundedFlag[]>([]);
   const [scoringResult, setScoringResult] = useState<ScoringResult | null>(null);
-  const [analysisResponse, setAnalysisResponse] = useState<(AnalysisResponse & { source: "model" | "rules_only" }) | null>(null);
+  const [analysisResponse, setAnalysisResponse] = useState<AnalysisApiResponse | null>(null);
   const [daysRemaining, setDaysRemaining] = useState<number | undefined>();
   const [isExpired, setIsExpired] = useState<boolean | undefined>();
 
@@ -93,7 +107,7 @@ export default function Home() {
         throw new Error(errorData.error || `Server responded with status ${res.status}`);
       }
 
-      const modelData: AnalysisResponse & { source: "model" | "rules_only" } = await res.json();
+      const modelData: AnalysisApiResponse = await res.json();
       setAnalysisResponse(modelData);
 
       // 3. Ground model flags: discard any flag whose quote cannot be found verbatim
@@ -111,8 +125,9 @@ export default function Home() {
       const scoreRes = calculateVerdict({
         ruleSignals,
         groundedFlags: merged,
-        modelVerdict: modelData.verdict,
-        modelConfidence: modelData.confidenceScore,
+        modelVerdict: modelData.source === "model" ? modelData.verdict : undefined,
+        modelConfidence:
+          modelData.source === "model" ? modelData.confidenceScore : undefined,
       });
       setScoringResult(scoreRes);
 
@@ -213,7 +228,7 @@ export default function Home() {
 
             {analysisResponse.source === "rules_only" && (
               <div role="status" className="rounded-md border border-amber-400 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-                Rule-based check only - AI analysis unavailable. Verify through an official channel before acting.
+                {FALLBACK_MESSAGES[analysisResponse.fallbackReason]} Verify through an official channel before acting.
               </div>
             )}
 
@@ -221,7 +236,10 @@ export default function Home() {
             <VerdictCard
               verdict={scoringResult.verdict}
               confidenceLevel={scoringResult.confidenceLevel}
-              verifyBeforeActing={scoringResult.verifyBeforeActing}
+              verifyBeforeActing={
+                scoringResult.verifyBeforeActing ||
+                analysisResponse.verdict !== scoringResult.verdict
+              }
               urgencyLevel={scoringResult.urgencyLevel}
               oneSentenceReason={scoringResult.oneSentenceReason}
               daysRemaining={daysRemaining}
@@ -242,14 +260,12 @@ export default function Home() {
 
               {/* Right Column: Plain Summary, Checklist, and Drafted Reply (7 cols) */}
               <div className="lg:col-span-7 space-y-6">
-                {analysisResponse.source === "model" ? (
-                  <SummarySection summary={analysisResponse.summary} currentLang={currentLang} />
-                ) : (
-                  <section className="rounded-lg border border-border bg-canvas-card p-5">
-                    <h2 className="font-serif text-lg font-semibold">General guidance</h2>
-                    <p className="mt-2 text-sm">Do not use links or contact details in the notice. Find the official website independently and verify the reference with the issuing organization.</p>
-                  </section>
-                )}
+                <VerdictAdvice
+                  analysisResponse={analysisResponse}
+                  verdict={scoringResult.verdict}
+                  currentLang={currentLang}
+                  tokenMap={redactionResult.tokenMap}
+                />
 
                 <section className="rounded-lg border border-border bg-canvas-card p-5" aria-labelledby="why-verdict-title">
                   <h2 id="why-verdict-title" className="font-serif text-lg font-semibold">Why this verdict</h2>
@@ -258,14 +274,6 @@ export default function Home() {
                   </ul>
                 </section>
 
-                <ChecklistSection
-                  items={analysisResponse.checklist}
-                  currentLang={currentLang}
-                />
-
-                {analysisResponse.source === "model" && (
-                  <ResponseDraft draftReply={analysisResponse.draftReply} tokenMap={redactionResult.tokenMap} currentLang={currentLang} />
-                )}
               </div>
             </div>
           </div>
@@ -278,7 +286,7 @@ export default function Home() {
             Notice Check · Privacy-First Administrative Verification Engine · Devpost Build With AI: Basics
           </p>
           <p className="mt-1 text-[11px] text-ink-muted">
-            Automatic masking is best-effort. Review the exact outgoing text; masked text is sent to this app and may be processed by Google Gemini when AI analysis is enabled. The app does not intentionally persist notice content.
+            Automatic masking is best-effort. Review the exact outgoing text; masked text is sent to this app and may be processed by the configured Groq or Gemini provider when AI analysis is enabled. The app does not intentionally persist notice content.
           </p>
         </div>
       </footer>

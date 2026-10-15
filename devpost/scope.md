@@ -8,7 +8,7 @@ status: approved
 Before you panic or pay, check whether an official-looking notice is real and know exactly what to do.
 
 ## The Unique Kernel
-Local-first privacy redaction paired with dual-engine verification: deterministic heuristics and official domain/threat signals merged with structured Gemini model analysis, where every single flag is verified as a verbatim quote from the original text, culminating in a calm document-style verdict, days-remaining counter, official channel verification checklist, and locally rehydrated drafted reply in English, Tamil, or Hindi.
+Local-first privacy redaction paired with dual-engine verification: deterministic heuristics and official domain/threat signals merged with structured AI analysis (Groq preferred, Gemini fallback), where every single flag is verified as a verbatim quote from the original text, culminating in a calm document-style verdict, days-remaining counter, official channel verification checklist, and locally rehydrated drafted reply in English, Tamil, or Hindi.
 
 ## Who It's For
 An everyday citizen or small business owner who receives a tax demand, bank KYC freeze warning, courier customs fee notice, or traffic e-challan and is unsure whether it is genuine or what it legally requires. Often they are not fluent in legalistic or bureaucratic English/Hindi and risk panicking into scam payments or missing real compliance deadlines.
@@ -16,7 +16,7 @@ An everyday citizen or small business owner who receives a tax demand, bank KYC 
 ## The Core Loop
 1. **Input**: User pastes the notice text or selects one of 6 built-in fictional sample letters.
 2. **Redact & Preview**: Pure TypeScript browser module detects and masks personal identifiers (names, phone numbers, emails, PAN, Aadhaar, account/IFSC numbers, PIN codes, addresses). The user reviews the exact outgoing-text preview, runs a best-effort residual-identifier scan, and can manually mask additional terms. Only the displayed masked text is submitted; automatic detection can miss names, addresses, and unusual identifiers.
-3. **Analyze**: The server route invokes Google Gemini using structured JSON with a Zod schema, while the rule-based signal engine runs deterministic checks (UPI, threat words, lookalike domains, sender mismatches, deadline math).
+3. **Analyze**: The server route invokes Groq first and configured Gemini models as fallback using JSON checked against a Zod schema, while the rule-based signal engine runs deterministic checks (UPI, threat words, lookalike domains, sender mismatches, deadline math).
 4. **Grounded Document Result**: The user sees a split-screen view: the original notice with exact verbatim trigger lines highlighted on one side, and the verdict (Likely genuine / Suspicious / Likely scam), plain-language summary, days-remaining deadline, urgency level (red/amber/green), official verification checklist, and locally rehydrated response draft in English, Tamil, or Hindi on the other.
 
 ## Inspiration & Identity
@@ -43,7 +43,8 @@ In the demo:
 - **Rule-based Signal Engine**: Pure TypeScript engine evaluating payment types (UPI, crypto, gift cards), urgency threats, domain lookalikes (Levenshtein distance against official domains like `incometax.gov.in`), non-.gov.in flags, sender mismatch, and deadline calculation.
 - **Evidence Grounding Engine**: Substring matching with whitespace normalization; ungrounded flags are discarded; overlapping highlights are merged.
 - **Scoring Function**: Deterministic algorithm in `/lib/scoring.ts` combining rule signals and model confidence.
-- **API Route**: Single `/api/analyze` route calling Gemini free-tier via Google AI Studio API key, validated with Zod, with one automatic retry and in-memory rate limiting.
+- **API Route**: Single `/api/analyze` route preferring Groq with Gemini as fallback, using server-side API keys, Zod validation, one retry per model for invalid output, and in-memory rate limiting.
+- **Rules-only safety**: Without AI, a notice lacking positive evidence from an allowlisted official domain is **Suspicious** and requires independent verification; no detected scam signal alone is not proof of authenticity.
 - **Samples**: 6 fictional sample letters in `/samples` (2 genuine, 4 scam across tax, bank KYC, courier, e-challan) clearly marked "Sample letter - fictional".
 - **Unit Tests**: Full Vitest suite covering redaction, rehydration, signal rules, quote grounding, deadline math, and scoring.
 

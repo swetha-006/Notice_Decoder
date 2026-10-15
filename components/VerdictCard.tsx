@@ -98,12 +98,18 @@ export function VerdictCard({
       ? urgencyStyles.labelHi
       : urgencyStyles.label;
 
+  const verifyMessage = {
+    en: "Verify before acting — automated checks cannot confirm authenticity.",
+    ta: "செயல்படுவதற்கு முன் சரிபார்க்கவும் — தானியங்கி சரிபார்ப்பால் உண்மைத்தன்மையை உறுதிப்படுத்த முடியாது.",
+    hi: "कार्रवाई से पहले पुष्टि करें — स्वचालित जांच प्रामाणिकता की पुष्टि नहीं कर सकती।",
+  }[currentLang];
+
   return (
     <div
       className={`rounded-lg border-2 p-6 shadow-sm ${verdictStyles.border} ${verdictStyles.bg}`}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <span
             className={`flex h-12 w-12 items-center justify-center rounded-lg shadow-sm ${verdictStyles.badge}`}
           >
@@ -115,9 +121,9 @@ export function VerdictCard({
               <CheckCircle2 className="h-7 w-7" />
             )}
           </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-serif text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="break-words font-serif text-2xl font-bold tracking-tight text-ink sm:text-3xl">
                 {localizedTitle}
               </h2>
               <span className="rounded bg-canvas-card px-2 py-0.5 text-xs font-mono font-semibold text-ink border border-border">
@@ -150,7 +156,7 @@ export function VerdictCard({
               <Clock className="h-3.5 w-3.5" />
               <span>
                 {isExpired
-                  ? "Deadline Expired"
+                  ? `Deadline passed ${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} ago`
                   : `${daysRemaining} Day${daysRemaining === 1 ? "" : "s"} Remaining`}
               </span>
             </span>
@@ -158,7 +164,9 @@ export function VerdictCard({
         </div>
       </div>
 
-      {verifyBeforeActing && <p className="mt-3 font-semibold text-suspicious-text">Verify before acting — the signals do not fully agree.</p>}
+      {verifyBeforeActing && (
+        <p className="mt-3 font-semibold text-suspicious-text">{verifyMessage}</p>
+      )}
 
       {/* One-Sentence Reason */}
       <div className="mt-4 rounded-md border border-border-subtle bg-canvas-card p-4">

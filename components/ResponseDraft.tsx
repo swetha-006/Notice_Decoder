@@ -86,7 +86,7 @@ export function ResponseDraft({
       </div>
 
       <div className="mt-4 rounded-md border border-border bg-canvas p-4">
-        <pre className="whitespace-pre-wrap font-sans text-xs sm:text-sm text-ink leading-relaxed font-normal">
+        <pre className="whitespace-pre-wrap break-words font-sans text-xs sm:text-sm text-ink leading-relaxed font-normal">
           {rehydratedText}
         </pre>
       </div>

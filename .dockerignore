@@ -1,9 +1,0 @@
-node_modules
-.next
-.git
-.agents
-.claude
-devpost/learner-profile.md
-*.log
-.env*.local
-.env

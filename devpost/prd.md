@@ -11,17 +11,19 @@ Source: `scope.md > The Unique Kernel`.
 ## The Core Journey
 1. **Arrival & Input**: The user arrives on a clean, quiet interface. They can paste any notice text into an expansive input area or click one of 6 pre-loaded fictional sample notices (e.g. Income Tax Demand, Courier Customs Fee, Bank KYC Suspension, Traffic E-Challan).
 2. **Instant Privacy Detection**: As soon as text is present and the user initiates check, the client-side redactor scans the text locally. Identifiers (names, phone numbers, email addresses, PAN, Aadhaar, bank accounts, IFSC, PIN codes) are replaced with structured tokens (e.g., `[PERSON_1]`, `[PAN_1]`).
-3. **Explicit "What Will Be Sent" Preview**: A dedicated card or modal displays the exact redacted text that will travel to the server. The user can manually click or select additional words to mask. They see accurate privacy copy explaining that masking is best-effort, only the displayed masked text is submitted, and the outgoing text may be processed by Google Gemini when model analysis is enabled.
-4. **Analysis with Dual-Engine Evaluation**: Upon confirmation, the redacted text is submitted. The rule-based signal engine executes immediate deterministic tests (UPI handles, threat terms, domain lookalikes via Levenshtein distance, non-.gov.in checks, sender mismatches, deadline math), while the `/api/analyze` route prompts Google Gemini for structured analysis.
+3. **Explicit "What Will Be Sent" Preview**: A dedicated card or modal displays the exact redacted text that will travel to the server. The user can manually click or select additional words to mask. They see accurate privacy copy explaining that masking is best-effort, only the displayed masked text is submitted, and the outgoing text may be processed by the configured Groq or Gemini provider when model analysis is enabled.
+4. **Analysis with Dual-Engine Evaluation**: Upon confirmation, the redacted text is submitted. The rule-based signal engine executes immediate deterministic tests (UPI handles, threat terms, domain lookalikes via Levenshtein distance, non-.gov.in checks, sender mismatches, deadline math), while the `/api/analyze` route tries Groq first and configured Gemini models as fallback for structured analysis.
 5. **Evidence Grounding Verification**: Every claim made by the model is validated against the submitted text. If a cited quote cannot be found verbatim (with whitespace normalized), it is dropped. Verified model flags are merged with rule-engine flags, de-duplicating overlapping character spans.
 6. **Side-by-Side Document Review**:
    - **Left Panel (Document View)**: The original notice is rendered with exact trigger lines highlighted in semantic colors (red for scam indicators, amber for suspicious traits, green/neutral for standard administrative language). Hovering or clicking a highlight shows the plain-language explanation.
    - **Right Panel (Action & Verdict View)**:
-     - Prominent verdict banner: **Likely genuine**, **Suspicious**, or **Likely scam**, with a confidence score and a single explanatory sentence.
+     - Prominent verdict banner: **Likely genuine**, **Suspicious**, or **Likely scam**, with a high / medium / low confidence level and a single explanatory sentence. When model and grounded/rule signals disagree, show “Verify before acting.”
      - Urgency badge (Red / Amber / Green) with a calculated **Days Remaining** countdown.
      - Plain-language summary answering: What is this? What does it demand? What happens if ignored?
      - Step-by-step "What To Do Next" checklist, prominently featuring official verification pathways (e.g. verifying DIN on `incometax.gov.in`).
-     - Ready-to-send drafted response or clarification request, with the user's original names and numbers **locally rehydrated** from browser memory.
+     - A likely-scam verdict shows multilingual safety guidance and no reply draft. A suspicious verdict shows a neutral request to verify the reference and applicable action/date, without asserting compliance or disputing a debt. A likely-genuine verdict may show the model's polite draft.
+     - If the model verdict differs from the final verdict, replace model-written advice with guidance for the final verdict and show “Verify before acting.”
+     - Draft tokens are locally rehydrated from browser memory.
      - Language selector toggle (English, Tamil, Hindi) that re-renders all summaries, checklists, and drafts in the chosen language.
 
 ## Screens and Layout
@@ -62,18 +64,18 @@ Source: `scope.md > The Unique Kernel`.
   4. `courier-customs-scam.txt`: Fake FedEx/India Post customs clearance demanding courier fee payment to a personal account.
   5. `echallan-scam.txt`: Fake traffic e-challan notice sent via mobile SMS with a shortened `bit.ly` or lookalike link `echallan-parivahan.in`.
   6. `bank-genuine-statement.txt`: Genuine bank annual statement notice asking user to log in only at the official netbanking portal.
-- All sample letters display a permanent disclaimer banner: *"Sample letter — fictional"*.
+- All sample letters display a permanent disclaimer banner: *"Sample letter — fictional"*. Issue dates are generated relative to the current date; genuine samples are issued two days ago and show a due date 14 days ahead.
 
 ### Client-Side Redaction & In-Memory Rehydration
 - **Detection Scope**:
-  - Full Names (heuristic based on salutations like "Dear [Name]", "To, [Name]", "Shri/Smt [Name]").
+  - Names (heuristic after salutations, name labels, and common Tamil/Devanagari honorifics; may include a one-word name).
   - Email addresses (`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`).
-  - Phone numbers (Indian 10-digit mobile `+91`, `0`, spaces/hyphens; international formats).
+  - Phone numbers (Indian grouped or ungrouped mobile numbers, common `+91`/`0` prefixes, grouped STD landlines, and a conservative international pattern).
   - Indian PAN numbers (`[A-Z]{5}[0-9]{4}[A-Z]{1}`).
-  - Aadhaar-style 12-digit numbers (`\d{4}\s?\d{4}\s?\d{4}`).
-  - Bank Account Numbers & IFSC codes (`[A-Z]{4}0[A-Z0-9]{6}`).
+  - Aadhaar-style numbers (grouped 4-4-4 numbers, or 12 digits when explicitly labeled Aadhaar).
+  - Bank account numbers (only when an account label supplies context; grouped values are supported) and IFSC codes (`[A-Z]{4}0[A-Z0-9]{6}`).
   - Indian Postal PIN codes (`\b[1-9][0-9]{5}\b`).
-  - Street addresses and house numbers (heuristics).
+  - Labeled address lines and PIN codes following postal labels (heuristics). DINs, section references, amounts, dates, and unlabelled reference numbers are not treated as Aadhaar or account numbers.
 - **Token Replacement**: Replaces each matched substring with a stable token: `[PERSON_1]`, `[PHONE_1]`, `[EMAIL_1]`, `[PAN_1]`, `[ACCOUNT_1]`, `[ADDRESS_1]`.
 - **In-Memory Token Map**: Stored strictly in browser state (never transmitted, never persisted in localStorage or cookies).
 - **Manual Redaction**: Users can click or highlight any unmasked word to convert it into a `[REDACTED_N]` token before sending.
@@ -89,10 +91,12 @@ Pure TypeScript module running deterministically:
    - Lookalike / near-miss detection: Levenshtein distance check against allowlisted domains (e.g. `incometax-gov.in`, `incometaxindiaefiling.org`, `parivahan-gov.in`).
    - Non-.gov.in validation: Flags notices claiming to be Government of India departments but linking to `.com`, `.co.in`, `.org`, `.xyz`, or raw IP addresses.
 4. **Sender Mismatch Signals**: Flags official notices originating from public free email services (`@gmail.com`, `@yahoo.com`, `@outlook.com`) or personal mobile numbers.
-5. **Deadline Extraction & Math**: Extracts stated dates/deadlines and computes days remaining relative to current date (e.g., "3 days remaining", "Expired yesterday").
+5. **Deadline Extraction & Math**: Recognizes dates only when attached to an explicit due phrase (`on or before`, `by`, `last date`, `due date`, `pay by`, `respond by`) or a relative period (`within N days/hours`). Supports `DD/MM/YYYY`, `DD-MM-YYYY`, and named dates with ordinal days. Relative periods are calculated from an explicit issue date when present; otherwise the phrase is shown without a countdown. Invalid calendar dates and incidental dates are ignored. Past deadlines say “Deadline passed N days ago.”
 
 ### Structured AI Analysis & Strict Evidence Grounding
-- Server route calls Gemini with structured output schema (Zod).
+- Server route calls the configured AI provider with structured output validated by Zod.
+- Groq is the preferred provider; Gemini is attempted as fallback when configured. API keys stay in server environment variables and are never sent to the browser.
+- In rules-only mode, absence of scam indicators is not positive proof: without a verified official-domain signal, the verdict is Suspicious and the user must verify independently.
 - Model outputs:
   - Document summary: Category, issuing authority claim, primary demand.
   - Urgency level: Low, Medium, High.
@@ -102,11 +106,12 @@ Pure TypeScript module running deterministically:
   - Draft response: A formal letter template tailored to either dispute a scam demand or comply with a genuine request.
   - Multi-lingual translations for English, Tamil, and Hindi.
 - **Evidence Grounding Engine**:
-  - Every quote returned by the model is verified against the submitted text using whitespace-normalized substring search.
+  - Every quote returned by the model is locally rehydrated from placeholders and verified against the original notice text using whitespace-normalized substring search.
   - Any model flag failing verbatim quote matching is discarded immediately.
   - Validated model flags and rule-based signal flags are merged, removing duplicates and computing exact start/end character offsets for UI rendering.
 
 ### Deterministic Scoring Function (`/lib/scoring.ts`)
+The UI exposes the scoring breakdown under “Why this verdict”. Official-domain and statutory-positive markers cannot offset coercion, credential requests, or payment-demand signals.
 The final verdict is not simply the model's opinion. A deterministic algorithm weighs:
 - Scam disqualifiers (e.g., UPI payment demand on a tax notice = automatic **Likely scam**).
 - Critical rule hits (lookalike domain, threat of arrest, free email sender).
@@ -126,8 +131,8 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 - **Redaction State**: Highlighting identified personal identifiers, allowing one-click toggle or manual word selection.
 - **Analyzing State**: Unobtrusive progress indication ("Checking official domain registries...", "Running signal heuristics...", "Grounding evidence...").
 - **Completed Result State**: Split view with highlighted text and action checklist.
-- **Retry / Recovery State**: If Gemini API returns invalid JSON or schema errors, the server retries once; if it fails again, returns a graceful fallback combining the full rule-based signal results.
-- **Rate Limit State**: In-memory rate limiting (10 requests per IP per minute) returns HTTP 429 with a clear "Please wait a moment" message.
+- **Retry / Recovery State**: If a configured provider returns invalid JSON or schema errors, the server retries once; if it fails again or is unavailable, the next configured provider is tried, then a graceful rules-only fallback is returned.
+- **Rate Limit State**: Configurable in-memory per-instance rate limiting defaults to 10 requests per 60 seconds. It identifies clients from platform/client IP headers, falling back to user-agent; deployments with multiple instances do not share this state.
 - **Session Boundary**: Completely ephemeral. Reloading clears all data; no local storage of notice contents.
 
 ## Product Decisions
@@ -142,7 +147,7 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 - Rule-based signal engine (UPI, crypto, urgency threats, lookalike domains, sender mismatch, deadline math).
 - Evidence grounding engine with whitespace normalization and character offset highlighter.
 - Deterministic scoring function in `/lib/scoring.ts`.
-- Next.js Route Handler `/api/analyze` with Gemini free-tier structured JSON output, Zod schema validation, retry logic, and in-memory rate limiting.
+- Next.js Route Handler `/api/analyze` with Groq-preferred/Gemini-fallback JSON output, Zod schema validation, retry logic, and in-memory rate limiting.
 - 6 fictional sample letters in `/samples`.
 - Editorial document split-screen UI with responsive mobile layout.
 - Multi-language output (English, Tamil, Hindi).
@@ -164,3 +169,13 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 
 ## Open Questions
 - None blocking specification. All behavioral criteria, acceptance criteria, and edge cases are specified.
+
+
+## Changes after review
+- Phase 1: Gemini receives an explicit response schema in addition to Zod validation; the one-retry policy remains.
+- Phase 1: The API response identifies `source` as `model` or `rules_only`. Rules-only results show a clear limitation banner and use generic guidance rather than presenting a model-generated summary or reply.
+- Phase 1: Model quotes containing redaction tokens are rehydrated locally before grounding against the original notice.
+- Phase 1: Confidence is a qualitative high / medium / low level based on signal agreement, and the UI shows the scoring breakdown. Positive markers cannot offset hard-risk signals.
+- Phase 1: The configured Gemini primary and optional fallbacks use a current, documented model; fallbacks are attempted only for model-unavailable failures. Rules-only results identify a safe fallback reason rather than exposing provider errors.
+- Approved revision: Groq is preferred with Gemini fallback, using server-side environment keys; provider free-tier availability and quotas may change. Rules-only notices without positive official-domain evidence now require independent verification and cannot be labelled Likely genuine.
+- Phase 2: Automatic masking and local token restoration replace matched spans in one pass. A best-effort outgoing-text scan reports only identifier categories and counts, and blocks analysis until detected patterns are manually masked.

@@ -12,6 +12,10 @@
  */
 
 import { checkDomainAuthenticity } from "./official-domains";
+import { extractDeadline, type DeadlineInfo } from "./deadline";
+
+export { extractDeadline } from "./deadline";
+export type { DeadlineInfo } from "./deadline";
 
 export type SignalSeverity = "critical" | "warning" | "info" | "positive";
 
@@ -27,13 +31,6 @@ export interface SignalFinding {
   };
   startIndex?: number;
   endIndex?: number;
-}
-
-export interface DeadlineInfo {
-  extractedDate?: string;
-  daysRemaining?: number;
-  isExpired?: boolean;
-  rawPhrase?: string;
 }
 
 export interface SignalEngineResult {
@@ -117,6 +114,8 @@ export function evaluateSignals(text: string, referenceDate: Date = new Date()):
   const isGovNoticeClaim = /\b(?:Income\s+Tax\s+Department|Government\s+of\s+India|Ministry\s+of\s+Finance|Parivahan|Traffic\s+Police|Customs\s+Department|India\s+Post(?:\s+Customs)?|Department\s+of\s+Revenue|Court\s+Summons|State\s+Bank\s+of\s+India|\bSBI\b|HDFC\s+Bank|ICICI\s+Bank|bank|courier|police|customs)\b/i.test(text);
 
   // 1. Payment Detection: UPI IDs
+  UPI_REGEX.lastIndex = 0;
+  GENERAL_UPI_REGEX.lastIndex = 0;
   let upiMatch: RegExpExecArray | null;
   while ((upiMatch = UPI_REGEX.exec(text)) !== null) {
     if (!isPaymentDemandContext(text, upiMatch.index)) continue;
@@ -151,6 +150,22 @@ export function evaluateSignals(text: string, referenceDate: Date = new Date()):
         },
       });
     }
+  }
+
+  const accountTransfer = findUrgentAccountTransfer(text);
+  if (accountTransfer) {
+    hasUpiOrCrypto = true;
+    findings.push({
+      id: `rule-account-transfer-${findings.length}`,
+      category: "payment",
+      severity: "critical",
+      quote: accountTransfer,
+      explanation: {
+        en: "Urgent or threatening payment instructions combine a bank account number with an IFSC code. Verify through the bank's official channel before acting.",
+        ta: "வங்கி கணக்கு எண் மற்றும் IFSC குறியீட்டுடன் அவசர அல்லது மிரட்டல் பணப்பரிமாற்ற அறிவுறுத்தல்கள் உள்ளன. செயல்படுவதற்கு முன் வங்கியின் அதிகாரப்பூர்வ வழியில் சரிபார்க்கவும்.",
+        hi: "बैंक खाता संख्या और IFSC कोड के साथ तत्काल या धमकीपूर्ण भुगतान निर्देश हैं। कार्रवाई से पहले बैंक के आधिकारिक माध्यम से सत्यापित करें।",
+      },
+    });
   }
 
   // Crypto / Gift Cards
@@ -354,58 +369,42 @@ export function evaluateSignals(text: string, referenceDate: Date = new Date()):
 }
 
 function isPaymentDemandContext(text: string, index: number): boolean {
-  const context = text.slice(Math.max(0, index - 100), Math.min(text.length, index + 100));
-  if (/\b(?:never|do not|don't|dont|avoid|warning|security notice)\b/i.test(context) && !/\b(?:pay|payment|transfer|send|deposit|remit)\b/i.test(context)) return false;
+  const start = Math.max(
+    text.lastIndexOf(".", index),
+    text.lastIndexOf("!", index),
+    text.lastIndexOf("?", index),
+    text.lastIndexOf("\n", index)
+  );
+  const stops = [".", "!", "?", "\n"]
+    .map((character) => text.indexOf(character, index))
+    .filter((position) => position !== -1);
+  const end = stops.length ? Math.min(...stops) : text.length;
+  const context = text.slice(start + 1, end);
+  if (
+    /\b(?:never|do\s+not|don't|dont|avoid|beware|will\s+not\s+ask)\b[^.!?\n]{0,100}\b(?:pay|payment|transfer|send|deposit|remit)\b/i.test(
+      context
+    )
+  ) {
+    return false;
+  }
   return /\b(?:pay|payment|transfer|send|deposit|remit|settle|beneficiary|authorized|authori[sz]ed)\b/i.test(context);
 }
 
-/**
- * Extracts deadlines and computes days remaining from notice text.
- */
-export function extractDeadline(text: string, referenceDate: Date = new Date()): DeadlineInfo | undefined {
-  // 1. Relative phrases: "within X days"
-  const relativeMatch = /\bwithin\s+(\d{1,2})\s+days?\b/i.exec(text);
-  if (relativeMatch) {
-    const days = parseInt(relativeMatch[1], 10);
-    return {
-      rawPhrase: relativeMatch[0],
-      daysRemaining: days,
-      isExpired: false,
-    };
-  }
+function findUrgentAccountTransfer(text: string): string | undefined {
+  const ifscPattern = /\b[A-Z]{4}0[A-Z0-9]{6}\b/i;
+  const transferPattern = /\b(?:transfer|send|pay|deposit|remit)\b/i;
+  const urgencyPattern =
+    /\b(?:immediately|urgent(?:ly)?|at once|today|within\s+\d+\s+(?:hours?|days?)|arrest|seiz(?:e|ure)|freeze|legal action|police complaint)\b/i;
 
-  // 2. Relative phrase: "within 24 hours"
-  if (/\bwithin\s+24\s+hours?\b/i.test(text)) {
-    return {
-      rawPhrase: "within 24 hours",
-      daysRemaining: 1,
-      isExpired: false,
-    };
-  }
-
-  // 3. Absolute dates in format DD/MM/YYYY or DD-MM-YYYY
-  const dateRegex = /\b(?:on or before|by|deadline:?|date:?)\s*(\d{1,2}[\/-]\d{1,2}[\/-]\d{4})\b/i;
-  const dateMatch = dateRegex.exec(text);
-  if (dateMatch) {
-    const rawDateStr = dateMatch[1];
-    const parts = rawDateStr.split(/[\/-]/);
-    const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; // 0-indexed
-    const year = parseInt(parts[2], 10);
-
-    const targetDate = new Date(year, month, day);
-    if (!isNaN(targetDate.getTime())) {
-      const diffMs = targetDate.getTime() - referenceDate.getTime();
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-      return {
-        extractedDate: rawDateStr,
-        rawPhrase: dateMatch[0],
-        daysRemaining: diffDays,
-        isExpired: diffDays < 0,
-      };
+  for (const sentence of text.split(/[.!?\n]+/)) {
+    if (
+      /\b\d{9,18}\b/.test(sentence) &&
+      ifscPattern.test(sentence) &&
+      transferPattern.test(sentence) &&
+      urgencyPattern.test(sentence)
+    ) {
+      return sentence.trim();
     }
   }
-
   return undefined;
 }

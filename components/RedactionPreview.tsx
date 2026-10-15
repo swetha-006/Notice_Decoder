@@ -50,7 +50,7 @@ export function RedactionPreview({
             This is exactly what will be sent
           </h2>
           <p className="mt-1 max-w-3xl text-xs text-ink-secondary">
-            Only the masked text shown below is submitted to this app. If Gemini analysis is enabled, that masked text is sent to Google for processing. Automatic masking can miss details, so review the outgoing text and mask anything sensitive before continuing.
+            Only the masked text shown below is submitted to this app. If AI analysis is enabled, that masked text is processed by the configured provider (Groq or Gemini). Automatic masking can miss details, so review the outgoing text and mask anything sensitive before continuing.
           </p>
         </div>
 
@@ -101,11 +101,11 @@ export function RedactionPreview({
             {Object.entries(redactionResult.tokenMap).map(([token, original]) => (
               <span
                 key={token}
-                className="inline-flex items-center gap-1.5 rounded border border-border bg-canvas-card px-2.5 py-1 text-xs text-ink"
+                className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded border border-border bg-canvas-card px-2.5 py-1 text-xs text-ink"
               >
                 <code className="font-mono font-bold text-ink-secondary">{token}</code>
                 <span className="text-ink-muted">→</span>
-                <span className="font-medium text-ink">{original}</span>
+                <span className="min-w-0 break-all font-medium text-ink">{original}</span>
               </span>
             ))}
           </div>
@@ -116,18 +116,22 @@ export function RedactionPreview({
         )}
 
         {/* Manual Masking Form */}
-        <form onSubmit={handleAddManualMask} className="mt-4 flex items-center gap-2 pt-3 border-t border-border">
+        <form
+          onSubmit={handleAddManualMask}
+          className="mt-4 flex flex-col items-stretch gap-2 border-t border-border pt-3 sm:flex-row sm:items-center"
+        >
           <input
             type="text"
             value={customWord}
             onChange={(e) => setCustomWord(e.target.value)}
             placeholder="Type any word or number to mask manually..."
-            className="flex-1 rounded border border-border bg-canvas-card px-3 py-1.5 text-xs text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none"
+            aria-label="Text to mask in the outgoing notice"
+            className="w-full min-w-0 rounded border border-border bg-canvas-card px-3 py-1.5 text-xs text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none sm:flex-1"
           />
           <button
             type="submit"
             disabled={!customWord.trim()}
-            className="inline-flex items-center gap-1 rounded bg-canvas-muted px-3 py-1.5 text-xs font-medium text-ink hover:bg-border transition disabled:opacity-40"
+            className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded bg-canvas-muted px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-border disabled:opacity-40 sm:justify-start"
           >
             <Plus className="h-3.5 w-3.5" />
             Mask This Term
@@ -146,10 +150,10 @@ export function RedactionPreview({
         </h3>
         {hasResidualFindings ? (
           <>
-            <p className="mt-1 text-xs text-ink-secondary">
+            <p id="privacy-scan-description" className="mt-1 text-xs text-ink-secondary">
               The scan found common identifier patterns in the masked text. It does not display their values here. Use the manual mask field above for each remaining item, then review the text again.
             </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-scam-text">
+            <ul id="privacy-scan-findings" className="mt-2 list-disc space-y-1 pl-5 text-xs text-scam-text">
               {residualFindings.map((finding) => (
                 <li key={finding.category}>
                   {finding.category}{finding.count > 1 ? ` (${finding.count} matches)` : ""}
@@ -158,7 +162,7 @@ export function RedactionPreview({
             </ul>
           </>
         ) : (
-          <p className="mt-1 text-xs text-ink-secondary">
+          <p id="privacy-scan-description" className="mt-1 text-xs text-ink-secondary">
             No common machine-readable identifier patterns were detected in the outgoing text. This is not a guarantee: names, addresses, and unusual identifiers may remain.
           </p>
         )}
@@ -173,7 +177,7 @@ export function RedactionPreview({
               <span className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 Original Text (Kept In Your Browser)
               </span>
-              <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap font-sans text-xs text-ink leading-relaxed">
+              <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap break-words font-sans text-xs text-ink leading-relaxed">
                 {originalText}
               </pre>
             </div>
@@ -186,7 +190,7 @@ export function RedactionPreview({
                 </span>
                 <span className="font-mono text-xs text-ink-muted font-medium">Outgoing text</span>
               </div>
-              <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap font-sans text-xs text-ink leading-relaxed">
+              <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap break-words font-sans text-xs text-ink leading-relaxed">
                 {redactionResult.redactedText}
               </pre>
             </div>
@@ -199,7 +203,7 @@ export function RedactionPreview({
               </span>
               <span className="font-mono text-xs text-ink-muted font-medium">Outgoing text</span>
             </div>
-            <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm text-ink leading-relaxed">
+            <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm text-ink leading-relaxed">
               {redactionResult.redactedText}
             </pre>
           </div>
@@ -224,7 +228,11 @@ export function RedactionPreview({
             id="confirm-analyze-btn"
             onClick={onConfirm}
             disabled={isAnalyzing || hasResidualFindings}
-            aria-describedby="privacy-scan-title"
+            aria-describedby={
+              hasResidualFindings
+                ? "privacy-scan-title privacy-scan-description privacy-scan-findings"
+                : "privacy-scan-title privacy-scan-description"
+            }
             className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover disabled:opacity-50"
           >
             {isAnalyzing ? (

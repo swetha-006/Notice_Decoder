@@ -43,7 +43,7 @@ Build mode: fast
   Becomes usable: `/api/analyze` Route Handler that validates incoming masked text, enforces in-memory rate limiting (10 req/min/IP), calls Google Gemini using the configurable `GEMINI_MODEL` env variable with structured JSON, validates responses against `AnalysisResponseSchema` (Zod), retries once on error, and provides a graceful fallback if the key is missing or invalid.
   Why now: Connects the server-side AI model safely without exposing the API key to client browsers, completing the dual-engine pipeline.
   PRD ref: `prd.md > Structured AI Analysis & Strict Evidence Grounding`, `prd.md > States and Boundaries`
-  Spec ref: `spec.md > External Services and Dependencies`, `spec.md > Data Model > Gemini Structured Response Schema`, `spec.md > Important Failure Modes`
+  Spec ref: `spec.md > External Services and Dependencies`, `spec.md > Data Model > Shared Structured Response Schema`, `spec.md > Important Failure Modes`
   Build: Create `/lib/schema.ts` with Zod validation schemas. Implement `/lib/rate-limit.ts` with an in-memory token bucket limiter. Implement `/app/api/analyze/route.ts` with model invocation, retry logic, error handling, and security headers. Create `.env.example`.
   Verify (mechanical): Run `npx vitest run` across all test suites, and execute a mock test against `/api/analyze` validating rate limiting, payload size rejection (>10k chars), and schema handling.
   Learner check: Trigger the route with mock input to verify structured JSON response containing categorized flags, checklist, and localized drafts.
@@ -66,7 +66,10 @@ Build mode: fast
 
 ## Final Review
 
-- [x] Final review complete — feedback resolved and learner confirms ready to ship
+- [x] Previous final review complete — before the approved provider and rules-only safety revision
+- [x] Post-revision hands-on check — learner confirmed the checks looked good; the individual verdict labels were not reported. A synthetic live request also succeeds through the configured Groq route.
+- [x] Mobile responsiveness hands-on check — learner confirmed the input, privacy-review, and result screens are usable at phone widths with no sideways scrolling.
+- [x] Final review complete — learner approved the responsive web app for shipping; no native-app scope change requested.
 
 ## Code Tour and App Map
 
@@ -75,9 +78,16 @@ Build mode: fast
 - [x] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
 
 Activity and evidence: Verified complete 4-stage pipeline across lib/redact.ts, lib/signals.ts, lib/grounding.ts, lib/scoring.ts, and app/api/analyze/route.ts with 33 passing Vitest tests.
-Route and stops: lib/redact.ts (redactNotice & rehydrate) -> lib/signals.ts (evaluateSignals) -> app/api/analyze/route.ts (Gemini schema & rate limit) -> lib/grounding.ts (findVerbatimQuote & mergeAndDeDuplicateFlags) -> lib/scoring.ts (calculateVerdict).
+Route and stops: lib/redact.ts (redactNotice & rehydrate) -> lib/signals.ts (evaluateSignals) -> app/api/analyze/route.ts (Groq-first/Gemini fallback, shared schema & rate limit) -> lib/grounding.ts (findVerbatimQuote & mergeAndDeDuplicateFlags) -> lib/scoring.ts (calculateVerdict).
 Edit outcome: Fixed severity type union across grounding and schema; fixed domain regex for multi-level subdomains.
 Reflection: Evidence grounding and local-first client-side redaction effectively solve both LLM hallucination risk and consumer privacy anxiety simultaneously.
 Activity mode: live app, automated test suites, and devpost/app-map.html visual take-home guide.
+Revision note: Refreshed `devpost/app-map.html` to show provider fallback and rules-only verification behavior.
 
 ## Revisions
+
+- Approved after hands-on review: prefer Groq using a server-side `GROQ_API_KEY`, try configured Gemini models when Groq is unavailable, and keep all provider keys in local/server environment variables. Free-tier availability and quotas are account-dependent and may change.
+- Approved safety revision: rules-only analysis must not label an unverified notice Likely genuine just because no scam rule matched; without positive allowlisted official-domain evidence, return Suspicious and require independent verification.
+- Groq strict-schema compatibility revision: on HTTP 400, retry once in JSON-object mode with the full schema in the system instructions; validate all output against the shared Zod schema. This fixed the full live synthetic analysis request, which now returns `source: model`. The learner confirmed the app and post-revision checks looked good; they did not provide individual verdict labels.
+- Mechanical verification: all 103 tests pass, lint and standalone type-check pass, the provider smoke check succeeds, and the local synthetic `/api/analyze` request returns model-backed output. Production build is deferred while the dev server is active.
+- Pre-deployment mobile responsiveness refinement: the privacy review overflowed horizontally at 320px when showing long identifier values and the manual-mask controls. Identifier chips now wrap, the manual-mask form stacks on narrow screens, and notice/evidence text can break long words. Browser checks across 320, 360, 375, 390, 768, 1024, and 1440px show no horizontal overflow on input, privacy-review, and result screens. The learner confirmed the phone-width screens are usable with no sideways scrolling.

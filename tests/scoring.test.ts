@@ -131,4 +131,48 @@ describe("Deterministic Composite Scoring Function (lib/scoring.ts)", () => {
     expect(result.urgencyLevel).toBe("low");
     expect(result.score).toBeLessThan(30);
   });
+
+  it("requires verification when rules-only analysis has no positive official evidence", () => {
+    const result = calculateVerdict({
+      ruleSignals: {
+        findings: [],
+        hasUpiOrCrypto: false,
+        hasLookalikeDomain: false,
+        hasUrgencyThreat: false,
+        hasSenderMismatch: false,
+        hasValidGovDomain: false,
+        isGovNoticeClaim: false,
+      },
+      groundedFlags: [],
+    });
+
+    expect(result.verdict).toBe("suspicious");
+    expect(result.urgencyLevel).toBe("medium");
+    expect(result.verifyBeforeActing).toBe(true);
+    expect(result.oneSentenceReason.en).toMatch(/cannot confirm this notice/i);
+    expect(result.breakdown).toContainEqual(
+      expect.objectContaining({
+        factor: expect.stringContaining("No AI assessment"),
+      })
+    );
+  });
+
+  it("allows a rules-only genuine verdict when a verified official domain is present", () => {
+    const result = calculateVerdict({
+      ruleSignals: {
+        findings: [],
+        hasUpiOrCrypto: false,
+        hasLookalikeDomain: false,
+        hasUrgencyThreat: false,
+        hasSenderMismatch: false,
+        hasValidGovDomain: true,
+        isGovNoticeClaim: true,
+      },
+      groundedFlags: [],
+    });
+
+    expect(result.verdict).toBe("likely_genuine");
+    expect(result.verifyBeforeActing).toBe(true);
+    expect(result.score).toBeLessThan(30);
+  });
 });

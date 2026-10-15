@@ -1,48 +1,75 @@
-import { describe, it, expect } from "vitest";
-import { extractDeadline } from "@/lib/signals";
+import { describe, expect, it } from "vitest";
+import { extractDeadline } from "@/lib/deadline";
 
-describe("Deadline Extraction & Days Remaining Math (lib/signals.ts)", () => {
+describe("explicit deadline extraction", () => {
   const mockNow = new Date("2026-10-15T00:00:00Z");
 
-  it("extracts 'within 24 hours' and calculates 1 day remaining", () => {
-    const text = "Notice demands full settlement within 24 hours or face penalty.";
-    const deadline = extractDeadline(text, mockNow);
+  it("anchors relative day periods to the issue date", () => {
+    const deadline = extractDeadline(
+      "Date of Issue: 10/10/2026. Please respond within 15 days.",
+      mockNow
+    );
 
-    expect(deadline).toBeDefined();
-    expect(deadline?.rawPhrase).toBe("within 24 hours");
-    expect(deadline?.daysRemaining).toBe(1);
-    expect(deadline?.isExpired).toBe(false);
+    expect(deadline).toMatchObject({
+      rawPhrase: "within 15 days",
+      extractedDate: "25/10/2026",
+      daysRemaining: 10,
+      isExpired: false,
+    });
   });
 
-  it("extracts relative 'within X days' properly", () => {
-    const text = "Please file your response within 15 days of receiving this notice.";
-    const deadline = extractDeadline(text, mockNow);
-
-    expect(deadline).toBeDefined();
-    expect(deadline?.rawPhrase).toBe("within 15 days");
-    expect(deadline?.daysRemaining).toBe(15);
-    expect(deadline?.isExpired).toBe(false);
+  it("keeps a relative phrase but omits countdown without an issue date", () => {
+    expect(extractDeadline("Please respond within 15 days.", mockNow)).toEqual({
+      rawPhrase: "within 15 days",
+    });
   });
 
-  it("extracts future DD/MM/YYYY dates and calculates accurate days remaining", () => {
-    // 10 days after Oct 15, 2026 is Oct 25, 2026
-    const text = "Submit your response on or before 25/10/2026 to avoid penalty.";
-    const deadline = extractDeadline(text, mockNow);
+  it("supports 48-hour periods relative to the issue date", () => {
+    const deadline = extractDeadline(
+      "Issued on 14/10/2026. Pay within 48 hours.",
+      mockNow
+    );
 
-    expect(deadline).toBeDefined();
-    expect(deadline?.extractedDate).toBe("25/10/2026");
-    expect(deadline?.daysRemaining).toBe(10);
-    expect(deadline?.isExpired).toBe(false);
+    expect(deadline).toMatchObject({
+      rawPhrase: "within 48 hours",
+      extractedDate: "16/10/2026",
+      daysRemaining: 1,
+      isExpired: false,
+    });
   });
 
-  it("identifies past dates as expired with negative daysRemaining", () => {
-    // 5 days before Oct 15, 2026 is Oct 10, 2026
-    const text = "Submit your response by 10/10/2026 to the assessing officer.";
-    const deadline = extractDeadline(text, mockNow);
+  it.each([
+    ["on or before 25/10/2026", "25/10/2026"],
+    ["by 25-10-2026", "25-10-2026"],
+    ["last date: 25 October 2026", "25 October 2026"],
+    ["due date is 25th October 2026", "25th October 2026"],
+    ["pay by 25/10/2026", "25/10/2026"],
+    ["respond by 25/10/2026", "25/10/2026"],
+  ])("extracts explicit due phrase %s", (phrase, date) => {
+    expect(extractDeadline(`Submit your response ${phrase}.`, mockNow)).toMatchObject({
+      extractedDate: date,
+      daysRemaining: 10,
+      isExpired: false,
+    });
+  });
 
-    expect(deadline).toBeDefined();
-    expect(deadline?.extractedDate).toBe("10/10/2026");
-    expect(deadline?.daysRemaining).toBeLessThan(0);
-    expect(deadline?.isExpired).toBe(true);
+  it("rejects invalid calendar dates instead of normalizing them", () => {
+    expect(extractDeadline("Respond by 31/02/2026.", mockNow)).toBeUndefined();
+  });
+
+  it("does not treat incidental dates or an issue date as a deadline", () => {
+    expect(
+      extractDeadline("Date of Issue: 10/10/2026. Issued on 10/10/2026.", mockNow)
+    ).toBeUndefined();
+  });
+
+  it("reports expired dates with a negative day count", () => {
+    expect(
+      extractDeadline("Last date for appeal: 10/10/2026.", mockNow)
+    ).toMatchObject({
+      extractedDate: "10/10/2026",
+      daysRemaining: -5,
+      isExpired: true,
+    });
   });
 });

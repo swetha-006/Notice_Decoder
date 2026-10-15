@@ -12,9 +12,9 @@ Before anything leaves the computer, the user inspects an exact preview of what 
 
 When the user confirms, the masked text is evaluated in two parallel ways:
 1. **A deterministic rule engine** (running in pure TypeScript) inspects the notice for known fraud patterns: non-governmental payment destinations (UPI IDs, cryptocurrency wallets, gift cards), coercive threat language ("arrest warrant", "within 24 hours"), lookalike domains (e.g. `incometax-gov.in` instead of `incometax.gov.in`), sender mismatches (tax notices from Gmail addresses), and calculation of response deadlines.
-2. **A server route** (`/api/analyze`) sends the masked text to the Google Gemini API (using a model configured via environment variable, such as `gemini-2.0-flash` or `gemini-1.5-flash`) demanding structured JSON verified against a strict Zod schema.
+2. **A server route** (`/api/analyze`) sends the masked text to Groq first when `GROQ_API_KEY` is configured, then tries configured Gemini models when available. Groq is asked for strict JSON Schema output; if the provider rejects that request format, the route retries in JSON-object mode with the schema included in its instructions. Every provider response is verified against the same strict Zod schema.
 
-Before showing anything to the user, an **Evidence Grounding Engine** cross-checks every single claim or quote returned by the model against the submitted notice text. If the model quotes something that isn't verbatim in the letter (accounting for normalized whitespace), that flag is immediately discarded.
+Before showing anything to the user, an **Evidence Grounding Engine** rehydrates redaction placeholders in each model quote locally, then cross-checks each quote against the original notice text. If the model quotes something that isn't verbatim in the letter (accounting for normalized whitespace), that flag is immediately discarded.
 
 Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the verified model flags and the rule engine signals. It assigns a clear verdict (**Likely genuine**, **Suspicious**, or **Likely scam**), an urgency level (red/amber/green), and a days-remaining countdown. The browser re-hydrates any drafted response with the user's real personal details locally so they can copy and send it, and renders everything in English, Tamil, or Hindi.
 
@@ -28,7 +28,7 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 4. **Signal Engine & Server Evaluation**:
    - Client executes `evaluateSignals(maskedText)` from `/lib/signals.ts`.
    - Client posts `{ maskedText }` to `/api/analyze`.
-   - `/api/analyze` verifies rate limits (in-memory token bucket), checks length `<= 10,000`, invokes Gemini with structured JSON, validates against `AnalysisResponseSchema` (Zod), retrying once on JSON/schema mismatch.
+   - `/api/analyze` verifies the configurable per-instance in-memory rate limit, checks length `<= 10,000`, invokes Groq before Gemini, validates JSON against `AnalysisResponseSchema` (Zod), and retries invalid output once per model.
    - Ref: `prd.md > Dual-Engine Analysis: Rule Engine & Grounded Model Analysis`.
 5. **Grounding & Scoring**:
    - `groundFlags(modelFlags, originalMaskedText)` verifies verbatim substrings in `/lib/grounding.ts`.
@@ -37,7 +37,7 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
    - Ref: `prd.md > Verbatim Evidence Highlighting & Grounding` & `prd.md > Deterministic Scoring Function`.
 6. **Side-by-Side Presentation**:
    - `DocumentViewer` renders original text with highlighted spans.
-   - `VerdictCard`, `SummarySection`, `ChecklistSection`, and `ResponseDraft` render right-hand panel.
+   - `VerdictCard` and `VerdictAdvice` render the right-hand panel. Scam verdicts use multilingual safety guidance without a reply draft; suspicious verdicts use a neutral verification reply; model/final-verdict disagreement uses final-verdict guidance and requests verification.
    - `rehydrate(draftText, tokenMap)` injects original personal identifiers back into the draft.
    - `LanguageSwitcher` toggles translations (English, Tamil, Hindi).
    - Ref: `prd.md > Side-by-Side Document Review` & `prd.md > Multi-Language Output`.
@@ -52,8 +52,8 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 - **Styling**: Tailwind CSS v3/v4 with custom typography and color tokens.
   - *Rationale*: High control over responsive layout, typography, and contrast tokens without heavy CSS runtimes.
   - *Doc link*: [tailwindcss.com/docs](https://tailwindcss.com/docs)
-- **AI SDK**: `@google/genai` (official Google Gen AI SDK) or `@google/generative-ai`.
-  - *Rationale*: Direct access to Gemini 2.0 Flash / 1.5 Flash structured output and system instructions on free tier.
+- **AI providers**: Groq's OpenAI-compatible Chat Completions REST API (native `fetch`) and the Google Gemini SDK.
+  - *Rationale*: Groq is the preferred provider, with Gemini as an optional fallback; both are accessed only from the server.
   - *Doc link*: [ai.google.dev/docs](https://ai.google.dev/docs)
 - **Schema Validation**: Zod (`zod`).
   - *Rationale*: Runtime validation of model JSON output, request bodies, and internal state.
@@ -68,8 +68,12 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 ## Where It Runs and How Someone Tries It
 - **Runtime**: Node.js 18+ (tested on Node 20 / 22), local web server, and modern Evergreen browser (Chrome, Firefox, Safari, Edge).
 - **Environment Variables**:
-  - `GEMINI_API_KEY`: Google AI Studio API key (free tier, required for AI analysis).
-  - `GEMINI_MODEL`: Model name (default `gemini-2.0-flash`, configurable to `gemini-1.5-flash`).
+  - `GROQ_API_KEY`: Groq API key; preferred when configured. Free-tier access, model availability, and quotas can change.
+  - `GROQ_MODEL`: Groq model (default `openai/gpt-oss-20b`).
+  - `GEMINI_API_KEY`: Optional Google AI Studio API key, used when Groq is unavailable or as the configured provider when Groq is absent.
+  - `GEMINI_MODEL`: Primary model (default `gemini-3.8-flash`).
+  - `GEMINI_MODEL_FALLBACKS`: Optional comma-separated Gemini models after the Gemini primary.
+- **Rules-only verdict**: Without a model response, a notice without positive evidence from an allowlisted official domain is Suspicious and requires independent verification. Lack of detected scam rules is not proof of authenticity.
 - **Start Command**:
   ```bash
   npm install
@@ -116,7 +120,7 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 - Implements: `prd.md > Notice Input & Sample Library`.
 
 ### `RedactionPreview`
-- What it does: Displays side-by-side or tabbed comparison of original notice vs. redacted text. Lists identified tokens (`[PERSON_1]`, `[PAN_1]`, etc.) with counts. Allows user to select unmasked words to redact them before proceeding.
+- What it does: Displays side-by-side or tabbed comparison of original notice vs. redacted text. Lists identified tokens (`[PERSON_1]`, `[PAN_1]`, etc.) with counts. Allows user to select unmasked words to redact them before proceeding. A best-effort scan reports residual identifier categories and counts without showing matched values, and blocks analysis until detected patterns are masked.
 - Implements: `prd.md > Client-Side Redaction & In-Memory Rehydration` and `prd.md > Explicit "What Will Be Sent" Preview`.
 
 ### `DocumentViewer`
@@ -124,7 +128,7 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 - Implements: `prd.md > Side-by-Side Document Review` and `prd.md > Verbatim Evidence Highlighting & Grounding`.
 
 ### `VerdictCard`
-- What it does: Displays the final consolidated verdict (**Likely genuine**, **Suspicious**, or **Likely scam**), confidence score (0–100%), urgency level badge (Red / Amber / Green), days-remaining counter, and one-sentence justification.
+- What it does: Displays the final consolidated verdict (**Likely genuine**, **Suspicious**, or **Likely scam**), qualitative confidence level (high / medium / low), urgency level badge (Red / Amber / Green), days-remaining counter, and one-sentence justification.
 - Implements: `prd.md > Deterministic Scoring Function` and `prd.md > Side-by-Side Document Review`.
 
 ### `SummarySection`
@@ -136,8 +140,12 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 - Implements: `prd.md > Actionable Verification Checklist & Official Portals`.
 
 ### `ResponseDraft`
-- What it does: Renders a formal drafted response letter or clarification request. Re-hydrates `[PERSON_1]` and other tokens with original local values. Includes a one-click "Copy to Clipboard" button.
+- What it does: Renders the approved neutral or model-generated response for non-scam verdicts. Re-hydrates tokens with original local values. Scam verdicts do not show a reply draft.
 - Implements: `prd.md > Localized Response Draft with Client Rehydration`.
+
+### `VerdictAdvice`
+- What it does: Ensures the displayed summary, checklist, and any reply are consistent with the final verdict. Provides multilingual scam safety guidance and a neutral verification response for suspicious notices.
+- Implements: `prd.md > Side-by-Side Document Review`.
 
 ### `LanguageSwitcher`
 - What it does: Allows toggling output language between English (`en`), Tamil (`ta`), and Hindi (`hi`). Dynamically updates the content of `VerdictCard`, `SummarySection`, `ChecklistSection`, and `ResponseDraft`.
@@ -185,8 +193,9 @@ export interface SignalEngineResult {
   hasValidGovDomain: boolean;
 }
 ```
+- `lib/deadline.ts` recognizes explicit deadline phrases and valid numeric or named calendar dates. Relative day/hour periods are anchored to a labeled issue date; without one, the UI shows the phrase without a countdown.
 
-### Gemini Structured Response Schema (`/lib/schema.ts`)
+### Shared Structured Response Schema (`/lib/schema.ts`)
 ```typescript
 import { z } from "zod";
 
@@ -262,7 +271,7 @@ export interface FinalAnalysisResult {
 ```
 Notice_Decoder/
 ├── .agents/skills/          # Installed Devpost Learn skills
-├── .env.example             # Safe template with GEMINI_API_KEY & GEMINI_MODEL
+├── .env.example             # Safe template with Groq and Gemini key/model settings
 ├── .gitignore               # Secrets, learner profile, build artifacts
 ├── devpost/                 # Devpost skill artifacts
 │   ├── learner-profile.md
@@ -284,7 +293,7 @@ Notice_Decoder/
 │   ├── globals.css          # Core CSS variables, typography, and highlight styles
 │   └── api/
 │       └── analyze/
-│           └── route.ts     # POST endpoint calling Gemini with Zod & rate limit
+│           └── route.ts     # POST endpoint with Groq/Gemini fallback, Zod & rate limit
 ├── components/
 │   ├── Header.tsx           # Editorial header with trust mark
 │   ├── NoticeInput.tsx      # Textarea with character count & submit button
@@ -322,19 +331,28 @@ Notice_Decoder/
 ```
 
 ## External Services and Dependencies
-- **Google AI Studio Gemini API**:
+- **Groq API (preferred when configured)**:
+  - Endpoint: `https://api.groq.com/openai/v1/chat/completions`.
+  - Model: `GROQ_MODEL` from `/lib/config.ts` (default `openai/gpt-oss-20b`).
+  - Auth: `GROQ_API_KEY` passed as a server-side bearer token.
+  - Output: Strict JSON Schema mode, then locally validated against `AnalysisResponseSchema`.
+  - Availability, free-tier quotas, and model access depend on the user's Groq account and may change.
+  - Documentation: [console.groq.com/docs](https://console.groq.com/docs)
+- **Google AI Studio Gemini API (fallback when configured)**:
   - Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` (via official SDK).
-  - Model: `process.env.GEMINI_MODEL || "gemini-2.0-flash"` (or `gemini-1.5-flash`).
+  - Model: `GEMINI_MODEL` from `/lib/config.ts`; optional fallback names are read from `GEMINI_MODEL_FALLBACKS`.
   - Auth: `GEMINI_API_KEY` passed via server-side environment variable.
-  - Rate limits: 15 Requests Per Minute (RPM), 1,500 Requests Per Day (RPD) on the free tier.
-  - Cost: Free tier ($0.00).
+  - Rate limits and pricing vary by account, model, and current provider terms.
   - Documentation: [ai.google.dev/pricing](https://ai.google.dev/pricing)
 - **Local In-Memory Rate Limiter**:
-  - Restricts clients to 10 requests per minute per IP to protect the free tier Gemini API key from exhaustion. Zero external infrastructure.
+  - Defaults to 10 requests per 60 seconds. `RATE_LIMIT_MAX_REQUESTS` and `RATE_LIMIT_WINDOW_MS` configure the thresholds.
+  - Prefers `x-vercel-forwarded-for`, `x-real-ip`, then `x-forwarded-for`; uses user-agent when no IP header is available. State is per server instance and is not a distributed abuse-prevention control.
 
 ## Important Failure Modes
-1. **Gemini API Key Missing or Invalid**:
-   - Fallback: The API route detects missing/unauthorized key and falls back to a 100% deterministic rule-based analysis. The UI displays an informative banner: *"Running in offline rule-based mode (AI key not configured)."*
+1. **Provider Key Missing, Invalid, or Unavailable**:
+   - Fallback: Groq is tried first, followed by configured Gemini models. If no model succeeds, the response has `source: "rules_only"` and a classified `fallbackReason`; the UI displays a reason-specific message and avoids presenting model-dependent content as generated.
+   - A rules-only notice without positive official-domain evidence is Suspicious and requires independent verification; no-match rules do not imply authenticity.
+   - If Groq rejects strict JSON Schema mode with HTTP 400, the route retries once using JSON-object mode and the schema in the system instructions. Output still must pass the shared Zod validation before it is used.
 2. **Model Returns Malformed JSON or Hallucinated Schema**:
    - Fallback: The route catches Zod validation errors, retries the request once with a corrective prompt. If validation fails again, it gracefully constructs a valid analysis from the rule engine findings and informs the user.
 3. **Model Quotes Hallucinated Text**:
@@ -345,10 +363,21 @@ Notice_Decoder/
 ## What Was Simplified and Why
 - **In-Memory Rate Limiting** instead of Redis / Upstash: Avoids external cloud accounts, setup complexity, and billing, keeping setup under 3 minutes for evaluators.
 - **Pure Regex/Heuristic Redaction** instead of client-side BERT / Spacy WASM: Keeps bundle size under 200KB, runs in sub-10ms with zero loading delay on mobile devices, and handles standard Indian identifiers (PAN, Aadhaar, Phone, Email) cleanly.
-- **Client-Side Rehydration** instead of server state: Zero database or session storage required. Keeps the token map in browser memory and avoids application-managed server persistence; it does not guarantee that heuristic redaction catches every identifier.
+- **Client-Side Rehydration** instead of server state: Zero database or session storage required. Keeps the token map in browser memory and avoids application-managed server persistence; heuristic redaction cannot guarantee that every identifier is detected.
 
 ## Decisions and Open Issues
-- **Free-Tier Model Choice**: Selected `gemini-2.0-flash` as the default model due to its speed, exceptional structured JSON following, and free tier availability, while allowing user override to `gemini-1.5-flash` via `GEMINI_MODEL`.
+- **AI Provider Choice**: Groq is preferred, with Gemini as a configured fallback. API keys are supplied locally or in the hosting environment; exact free-tier quotas and model availability are account-dependent and can change.
 - **Edit Distance Threshold**: Set Levenshtein distance `<= 2` on lookalike domain detection against the allowlist (`incometax.gov.in`, `parivahan.gov.in`, `sbi.co.in`, etc.) to reliably catch fraudulent typosquatting domains.
 - **Tamil and Hindi Localization**: Model outputs multi-lingual content directly in a single pass to minimize latency and token usage.
 - All consequential technical decisions are agreed upon and documented.
+
+
+## Changes after review
+- Phase 1: Added a Gemini `responseSchema` contract alongside Zod validation and preserved one retry for invalid output.
+- Phase 1: API responses identify model vs rules-only output; the UI discloses rules-only mode and avoids presenting model-dependent content as if it were generated.
+- Phase 1: Grounding rehydrates placeholder tokens locally before matching quotes to the original notice.
+- Phase 1: Gemini model names are centralized in `/lib/config.ts`, and API failures have classified, user-safe fallback reasons. The approved provider revision below now advances across configured providers after any failure.
+- Approved revision: `/api/analyze` now tries Groq first and Gemini candidates afterward, with shared Zod validation and sanitized provider failures. Rules-only scoring requires positive official-domain evidence before returning Likely genuine.
+- Phase 1: Scoring now exposes a documented breakdown, uses qualitative confidence, and prevents positive markers from offsetting hard-risk signals.
+- Phase 1: Rule checks now include credential requests, generic short deadlines, brand-named unallowlisted domains, personal-account transfer demands, and contextual UPI demand detection.
+- Phase 2: Redaction replacements use source spans in one pass, and restored token values are not rescanned. The outgoing-text gate remains best-effort and reports only category/count metadata.
