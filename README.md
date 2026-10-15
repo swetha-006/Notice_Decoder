@@ -20,7 +20,7 @@ Notice Check operates on a **dual-engine, privacy-preserving architecture**:
 
 1. **In-Browser PII Redaction**: Before text leaves the machine, regex and heuristic engines replace names, phone numbers, email addresses, PANs, Aadhaar numbers, and bank account numbers with anonymous tokens (e.g. `[PERSON_1]`, `[PAN_1]`). The token map remains in browser memory only.
 2. **Deterministic Fraud Signal Engine**: Runs pure TypeScript rules verifying non-governmental payment mechanisms (UPI handles, crypto, gift cards), urgency threat patterns, domain lookalikes (Levenshtein distance against official `.gov.in` allowlists), and response deadlines.
-3. **Structured Model Analysis**: Calls Google Gemini (configurable model via `GEMINI_MODEL`, default `gemini-2.0-flash`) via a protected server route requesting structured JSON with a strict Zod schema.
+3. **Structured Model Analysis**: Calls Google Gemini (configurable model via `GEMINI_MODEL`, default `gemini-3.8-flash`) via a protected server route requesting structured JSON with a strict Zod schema.
 4. **Strict Evidence Grounding**: Every quote returned by the model is validated as a verbatim substring in the submitted notice using whitespace-normalized alignment. Any ungrounded claim is dropped immediately.
 5. **Deterministic Composite Scoring**: Combines rule signals and grounded model findings using a transparent formula (`/lib/scoring.ts`) to produce a definitive verdict (**Likely genuine**, **Suspicious**, or **Likely scam**), urgency level, and days-remaining deadline.
 6. **Local Rehydration**: Formal drafted clarification and dispute letters have their personal details restored locally in the browser, with one-click copy and translations in **English**, **Tamil (தமிழ்)**, and **Hindi (हिन्दी)**.
@@ -43,7 +43,7 @@ flowchart TD
     subgraph ServerRoute ["Next.js App Router Server (/api/analyze)"]
         PrivacyGate -.->|"Masked Text Only ([PERSON_1], [PAN_1])"| RateLimiter["In-Memory Rate Limiter (10 req/min/IP)"]
         RateLimiter --> ZodIn["Zod Request Validator (<= 10k chars)"]
-        ZodIn --> GeminiAPI["Google Gemini API (Free Tier: gemini-2.0-flash)"]
+        ZodIn --> GeminiAPI["Google Gemini API (Free Tier: gemini-3.8-flash)"]
         GeminiAPI --> ZodOut["Zod Structured Schema Validator + Auto-Retry"]
     end
 
@@ -99,9 +99,17 @@ cp .env.example .env.local
 Add your free Google Gemini API key:
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.8-flash
+GEMINI_MODEL_FALLBACKS=
 ```
 *(Note: If `GEMINI_API_KEY` is omitted, the app automatically runs in offline rule-based mode).*
+
+### Check Gemini before a demo
+With `GEMINI_API_KEY` configured in `.env.local`, run:
+```bash
+npm run check:model
+```
+The command makes one small schema-constrained request and prints `OK` or a classified failure without exposing provider error details.
 
 ### 3. Run Locally
 ```bash
@@ -125,7 +133,8 @@ Run the full Vitest suite with `npm test` to validate redaction, privacy scannin
 3. Click **Add New Project** and select this repository.
 4. Under **Environment Variables**, add:
    - `GEMINI_API_KEY`: Your Google AI Studio API key.
-   - `GEMINI_MODEL`: `gemini-2.0-flash`.
+   - `GEMINI_MODEL`: `gemini-3.8-flash`.
+   - `GEMINI_MODEL_FALLBACKS`: Optional comma-separated models, attempted only if the primary model is unavailable.
 5. Click **Deploy**. Your app is live in under 60 seconds with zero hosting costs.
 
 ---

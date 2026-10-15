@@ -12,7 +12,7 @@ Before anything leaves the computer, the user inspects an exact preview of what 
 
 When the user confirms, the masked text is evaluated in two parallel ways:
 1. **A deterministic rule engine** (running in pure TypeScript) inspects the notice for known fraud patterns: non-governmental payment destinations (UPI IDs, cryptocurrency wallets, gift cards), coercive threat language ("arrest warrant", "within 24 hours"), lookalike domains (e.g. `incometax-gov.in` instead of `incometax.gov.in`), sender mismatches (tax notices from Gmail addresses), and calculation of response deadlines.
-2. **A server route** (`/api/analyze`) sends the masked text to the Google Gemini API (using a model configured via environment variable, such as `gemini-2.0-flash` or `gemini-1.5-flash`) demanding structured JSON verified against a strict Zod schema.
+2. **A server route** (`/api/analyze`) sends the masked text to the Google Gemini API (using the configured `GEMINI_MODEL` and optional `GEMINI_MODEL_FALLBACKS`) requesting structured JSON verified against a strict Zod schema.
 
 Before showing anything to the user, an **Evidence Grounding Engine** rehydrates redaction placeholders in each model quote locally, then cross-checks each quote against the original notice text. If the model quotes something that isn't verbatim in the letter (accounting for normalized whitespace), that flag is immediately discarded.
 
@@ -69,7 +69,8 @@ Finally, a **deterministic scoring function** (`/lib/scoring.ts`) combines the v
 - **Runtime**: Node.js 18+ (tested on Node 20 / 22), local web server, and modern Evergreen browser (Chrome, Firefox, Safari, Edge).
 - **Environment Variables**:
   - `GEMINI_API_KEY`: Google AI Studio API key (free tier, required for AI analysis).
-  - `GEMINI_MODEL`: Model name (default `gemini-2.0-flash`, configurable to `gemini-1.5-flash`).
+  - `GEMINI_MODEL`: Primary model (default `gemini-3.8-flash`).
+  - `GEMINI_MODEL_FALLBACKS`: Optional comma-separated fallback models; used only when a model is unavailable.
 - **Start Command**:
   ```bash
   npm install
@@ -324,7 +325,7 @@ Notice_Decoder/
 ## External Services and Dependencies
 - **Google AI Studio Gemini API**:
   - Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` (via official SDK).
-  - Model: `process.env.GEMINI_MODEL || "gemini-2.0-flash"` (or `gemini-1.5-flash`).
+  - Model: `GEMINI_MODEL` from `/lib/config.ts`; optional fallback names are read from `GEMINI_MODEL_FALLBACKS`.
   - Auth: `GEMINI_API_KEY` passed via server-side environment variable.
   - Rate limits: 15 Requests Per Minute (RPM), 1,500 Requests Per Day (RPD) on the free tier.
   - Cost: Free tier ($0.00).
@@ -334,7 +335,7 @@ Notice_Decoder/
 
 ## Important Failure Modes
 1. **Gemini API Key Missing or Invalid**:
-   - Fallback: Missing keys or model failures return `source: "rules_only"`. The UI displays “Rule-based check only - AI analysis unavailable” and hides model-dependent summary and reply content.
+   - Fallback: Missing keys or model failures return `source: "rules_only"` and a classified `fallbackReason`; the UI displays a reason-specific message and hides model-dependent summary and reply content.
 2. **Model Returns Malformed JSON or Hallucinated Schema**:
    - Fallback: The route catches Zod validation errors, retries the request once with a corrective prompt. If validation fails again, it gracefully constructs a valid analysis from the rule engine findings and informs the user.
 3. **Model Quotes Hallucinated Text**:
@@ -348,7 +349,7 @@ Notice_Decoder/
 - **Client-Side Rehydration** instead of server state: Zero database or session storage required. Keeps the token map in browser memory and avoids application-managed server persistence; heuristic redaction cannot guarantee that every identifier is detected.
 
 ## Decisions and Open Issues
-- **Free-Tier Model Choice**: Selected `gemini-2.0-flash` as the default model due to its speed, exceptional structured JSON following, and free tier availability, while allowing user override to `gemini-1.5-flash` via `GEMINI_MODEL`.
+- **Free-Tier Model Choice**: Selected `gemini-3.8-flash` after checking Google's model, deprecation, structured-output, and pricing documentation. The model has no announced shutdown date on the deprecation page; configured fallbacks are attempted only for model-unavailable errors.
 - **Edit Distance Threshold**: Set Levenshtein distance `<= 2` on lookalike domain detection against the allowlist (`incometax.gov.in`, `parivahan.gov.in`, `sbi.co.in`, etc.) to reliably catch fraudulent typosquatting domains.
 - **Tamil and Hindi Localization**: Model outputs multi-lingual content directly in a single pass to minimize latency and token usage.
 - All consequential technical decisions are agreed upon and documented.
@@ -358,5 +359,6 @@ Notice_Decoder/
 - Phase 1: Added a Gemini `responseSchema` contract alongside Zod validation and preserved one retry for invalid output.
 - Phase 1: API responses identify model vs rules-only output; the UI discloses rules-only mode and avoids presenting model-dependent content as if it were generated.
 - Phase 1: Grounding rehydrates placeholder tokens locally before matching quotes to the original notice.
+- Phase 1: Gemini model names are centralized in `/lib/config.ts`; API failures have classified, user-safe fallback reasons, and only model-unavailable failures advance to configured fallback models.
 - Phase 1: Scoring now exposes a documented breakdown, uses qualitative confidence, and prevents positive markers from offsetting hard-risk signals.
 - Phase 1: Rule checks now include credential requests, generic short deadlines, brand-named unallowlisted domains, personal-account transfer demands, and contextual UPI demand detection.

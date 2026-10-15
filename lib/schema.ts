@@ -54,6 +54,18 @@ export const AnalysisResponseSchema = z.object({
 
 export type AnalysisResponse = z.infer<typeof AnalysisResponseSchema>;
 
+export const FallbackReasonSchema = z.enum([
+  "missing_key",
+  "auth",
+  "model_unavailable",
+  "quota",
+  "timeout",
+  "invalid_output",
+  "unknown",
+]);
+
+export type FallbackReason = z.infer<typeof FallbackReasonSchema>;
+
 export const AnalyzeRequestSchema = z.object({
   maskedText: z
     .string()

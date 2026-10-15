@@ -172,3 +172,4 @@ The final verdict is not simply the model's opinion. A deterministic algorithm w
 - Phase 1: The API response identifies `source` as `model` or `rules_only`. Rules-only results show a clear limitation banner and use generic guidance rather than presenting a model-generated summary or reply.
 - Phase 1: Model quotes containing redaction tokens are rehydrated locally before grounding against the original notice.
 - Phase 1: Confidence is a qualitative high / medium / low level based on signal agreement, and the UI shows the scoring breakdown. Positive markers cannot offset hard-risk signals.
+- Phase 1: The configured Gemini primary and optional fallbacks use a current, documented model; fallbacks are attempted only for model-unavailable failures. Rules-only results identify a safe fallback reason rather than exposing provider errors.
