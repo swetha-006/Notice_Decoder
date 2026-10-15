@@ -55,6 +55,16 @@ Deposit to UPI ID: incometax-refund@okaxis immediately.`;
     expect(grounded.some((f) => f.quote.includes("auctioned"))).toBe(false);
   });
 
+  it("rehydrates [PERSON_1] and [PAN_1] in model quotes before grounding", () => {
+    const original = "Dear Meena, your PAN ABCDE1234F requires review.";
+    const flags = [
+      { quote: "Dear [PERSON_1]", category: "procedural_anomaly", severity: "warning" as const, explanation: { en: "Name", ta: "பெயர்", hi: "नाम" } },
+      { quote: "[PAN_1] requires review", category: "suspicious_demand", severity: "critical" as const, explanation: { en: "PAN", ta: "பான்", hi: "पैन" } },
+    ];
+    const grounded = groundModelFlags(flags, original, { "[PERSON_1]": "Meena", "[PAN_1]": "ABCDE1234F" });
+    expect(grounded.map((flag) => flag.quote)).toEqual(["Dear Meena", "ABCDE1234F requires review"]);
+  });
+
   it("merges rule findings and model flags without overlapping duplicates", () => {
     const modelFlags = [
       {

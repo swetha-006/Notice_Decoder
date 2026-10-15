@@ -31,7 +31,8 @@ export interface ScoringInput {
 export interface ScoringResult {
   score: number; // 0 to 100
   verdict: Verdict;
-  confidenceScore: number;
+  confidenceLevel: "high" | "medium" | "low";
+  verifyBeforeActing: boolean;
   urgencyLevel: Urgency;
   oneSentenceReason: {
     en: string;
@@ -61,6 +62,12 @@ export function calculateVerdict(input: ScoringInput): ScoringResult {
       factor: "Directs victim to a typosquatting lookalike portal imitating an official registry",
       points: 95,
     });
+  }
+
+  const hasCredentialRequest = ruleSignals.findings.some((finding) => finding.category === "sender" && finding.severity === "critical" && /\b(?:OTP|PIN|CVV|password|Aadhaar|PAN)\b/i.test(finding.quote));
+  if (hasCredentialRequest) {
+    score = Math.max(score, 85);
+    breakdown.push({ factor: "Requests sensitive credentials or identity updates through an unverified channel", points: 85 });
   }
 
   if (ruleSignals.hasSenderMismatch) {
@@ -129,14 +136,14 @@ export function calculateVerdict(input: ScoringInput): ScoringResult {
     }
 
     // Positive signals reducing scam score
-    if (ruleSignals.hasValidGovDomain) {
+    if (!ruleSignals.hasCoercionOrPaymentDemand && !ruleSignals.hasUpiOrCrypto && !ruleSignals.hasLookalikeDomain && !ruleSignals.hasSenderMismatch && ruleSignals.hasValidGovDomain) {
       score -= 40;
       breakdown.push({ factor: "Links strictly to verified official .gov.in domain registry", points: -40 });
     }
 
     // Standard official statutory references (e.g. Section 143(1), valid DIN format)
     const hasOfficialDin = groundedFlags.some((f) => f.severity === "positive");
-    if (hasOfficialDin) {
+    if (!ruleSignals.hasCoercionOrPaymentDemand && !ruleSignals.hasUpiOrCrypto && !ruleSignals.hasLookalikeDomain && !ruleSignals.hasSenderMismatch && hasOfficialDin) {
       score -= 20;
       breakdown.push({ factor: "Contains valid official verification markers", points: -20 });
     }
@@ -197,18 +204,22 @@ export function calculateVerdict(input: ScoringInput): ScoringResult {
     };
   }
 
-  // Calculate confidence score (50–99%)
-  let confidenceScore: number;
-  if (score >= 90 || score <= 10) {
-    confidenceScore = Math.max(92, Math.min(99, modelConfidence));
-  } else {
-    confidenceScore = Math.min(88, Math.max(65, Math.round(50 + Math.abs(score - 50) * 0.8)));
-  }
+  // Confidence reflects agreement between deterministic verdict and the model verdict,
+  // not a fabricated probability. In rules-only mode, absence of a model keeps confidence low.
+  const hardRuleSignal = ruleSignals.hasUpiOrCrypto || ruleSignals.hasLookalikeDomain || ruleSignals.hasSenderMismatch;
+  const modelDisagrees = Boolean(modelVerdict && modelVerdict !== verdict);
+  const groundedModelFlags = groundedFlags.filter((flag) => flag.source === "model");
+  const modelFlagSupportsScam = groundedModelFlags.some((flag) => flag.severity === "critical" || flag.category === "threat_or_coercion" || flag.category === "suspicious_demand");
+  const modelFlagContradictsScam = groundedModelFlags.some((flag) => flag.severity === "positive");
+  const flagsDisagree = verdict === "likely_scam" ? modelFlagContradictsScam : verdict === "likely_genuine" && modelFlagSupportsScam;
+  const verifyBeforeActing = modelDisagrees || flagsDisagree;
+  const confidenceLevel: "high" | "medium" | "low" = verifyBeforeActing || !modelVerdict ? "low" : hardRuleSignal ? "high" : modelVerdict === verdict && groundedModelFlags.length > 0 ? "high" : "medium";
 
   return {
     score,
     verdict,
-    confidenceScore,
+    confidenceLevel,
+    verifyBeforeActing,
     urgencyLevel,
     oneSentenceReason: reason,
     breakdown,

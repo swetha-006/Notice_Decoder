@@ -85,6 +85,24 @@ describe("Rule-Based Fraud Signal Engine (lib/signals.ts)", () => {
     expect(senderFinding?.quote).toBe("taxofficer.delhi@gmail.com");
   });
 
+  it("detects credential harvesting, generic short deadlines, unlisted brand domains, and personal transfers", () => {
+    const credentials = evaluateSignals("Bank notice: update PAN and Aadhaar at link within 12 hours.");
+    expect(credentials.findings.some((finding) => /Aadhaar|PAN/.test(finding.quote))).toBe(true);
+    expect(credentials.hasUrgencyThreat).toBe(true);
+
+    const brandDomain = evaluateSignals("SBI account warning: visit https://sbi-kyc-update.co.in/login");
+    expect(brandDomain.hasLookalikeDomain).toBe(true);
+
+    const transfer = evaluateSignals("Transfer the penalty to my personal bank account immediately.");
+    expect(transfer.hasUpiOrCrypto).toBe(true);
+  });
+
+  it("does not classify a UPI safety warning as a payment demand", () => {
+    const result = evaluateSignals("State Bank of India: never share your UPI PIN. Do not pay to any UPI ID. Verify at https://onlinesbi.sbi.");
+    expect(result.hasUpiOrCrypto).toBe(false);
+    expect(result.findings.some((finding) => finding.category === "sender" && finding.severity === "critical")).toBe(false);
+  });
+
   it("calculates Levenshtein distance accurately", () => {
     expect(levenshteinDistance("incometax", "incometax")).toBe(0);
     expect(levenshteinDistance("incometax", "incomtax")).toBe(1);

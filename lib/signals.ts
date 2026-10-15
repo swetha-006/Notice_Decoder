@@ -45,6 +45,7 @@ export interface SignalEngineResult {
   hasSenderMismatch: boolean;
   hasValidGovDomain: boolean;
   isGovNoticeClaim: boolean;
+  hasCoercionOrPaymentDemand?: boolean;
 }
 
 // Threat & Coercion Keywords
@@ -113,14 +114,12 @@ export function evaluateSignals(text: string, referenceDate: Date = new Date()):
   let hasValidGovDomain = false;
 
   // Check if text claims to be an official government notice
-  const isGovNoticeClaim =
-    /\b(?:Income\s+Tax\s+Department|Government\s+of\s+India|Ministry\s+of\s+Finance|Parivahan|Traffic\s+Police|Customs\s+Department|India\s+Post\s+Customs|Department\s+of\s+Revenue|Court\s+Summons)\b/i.test(
-      text
-    );
+  const isGovNoticeClaim = /\b(?:Income\s+Tax\s+Department|Government\s+of\s+India|Ministry\s+of\s+Finance|Parivahan|Traffic\s+Police|Customs\s+Department|India\s+Post(?:\s+Customs)?|Department\s+of\s+Revenue|Court\s+Summons|State\s+Bank\s+of\s+India|\bSBI\b|HDFC\s+Bank|ICICI\s+Bank|bank|courier|police|customs)\b/i.test(text);
 
   // 1. Payment Detection: UPI IDs
   let upiMatch: RegExpExecArray | null;
   while ((upiMatch = UPI_REGEX.exec(text)) !== null) {
+    if (!isPaymentDemandContext(text, upiMatch.index)) continue;
     hasUpiOrCrypto = true;
     findings.push({
       id: `rule-upi-${findings.length}`,
@@ -136,6 +135,7 @@ export function evaluateSignals(text: string, referenceDate: Date = new Date()):
   }
 
   while ((upiMatch = GENERAL_UPI_REGEX.exec(text)) !== null) {
+    if (!isPaymentDemandContext(text, upiMatch.index)) continue;
     const quote = upiMatch[0];
     if (!findings.some((f) => f.quote === quote)) {
       hasUpiOrCrypto = true;
@@ -205,6 +205,24 @@ export function evaluateSignals(text: string, referenceDate: Date = new Date()):
     }
   }
 
+  // Credential harvesting and contextual urgency / transfer demands.
+  const credentialPattern = /(?:\b(?:OTP|PIN|CVV|password)\b.{0,45}\b(?:share|provide|submit|enter|send|verify|update)\b|\b(?:share|provide|submit|enter|send|verify|update)\b.{0,45}\b(?:OTP|PIN|CVV|password)\b|update\s+(?:your\s+)?(?:PAN(?:\s+and\s+Aadhaar)?|Aadhaar)\s+(?:at|through|using)\s+(?:the\s+)?(?:link|portal|URL))/i;
+  const credentialMatch = credentialPattern.exec(text);
+  if (credentialMatch && !/\b(?:never|do not|don't|dont)\b/i.test(text.slice(Math.max(0, credentialMatch.index - 50), credentialMatch.index))) findings.push({ id: `rule-credentials-${findings.length}`, category: "sender", severity: "critical", quote: credentialMatch[0], explanation: { en: "Requests sensitive credentials or identity updates through a notice link. Verify independently and never share OTPs, PINs, or passwords.", ta: "இணைப்பின் மூலம் ரகசியத் தகவல் அல்லது அடையாளப் புதுப்பிப்பைக் கோருகிறது. OTP, PIN அல்லது கடவுச்சொல்லைப் பகிர வேண்டாம்.", hi: "नोटिस लिंक के माध्यम से संवेदनशील जानकारी मांगता है। OTP, PIN या पासवर्ड साझा न करें।" } });
+
+  const genericUrgency = /\bwithin\s+(\d{1,3})\s*(hours?|days?)\b/i.exec(text);
+  if (genericUrgency && Number(genericUrgency[1]) <= 72) {
+    hasUrgencyThreat = true;
+    findings.push({ id: `rule-urgency-${findings.length}`, category: "threat", severity: "warning", quote: genericUrgency[0], explanation: { en: "A short deadline of 72 hours or less can pressure the recipient to act before verifying.", ta: "72 மணி நேரத்திற்குள் உள்ள குறுகிய காலக்கெடு சரிபார்ப்பதற்கு முன் செயல்பட அழுத்தம் தரலாம்.", hi: "72 घंटे या उससे कम की समय सीमा सत्यापन से पहले कार्रवाई का दबाव बना सकती है।" } });
+  }
+
+  const transferPattern = /(?:transfer|send|deposit|remit|pay)\s+(?:(?:the\s+)?(?:amount|money|fee|penalty|funds)\s+)?(?:to|into)\s+(?:(?:my|our|the agent'?s|personal|individual)\s+){0,2}(?:bank\s+account|account|beneficiary account)/i;
+  const transferMatch = transferPattern.exec(text);
+  if (transferMatch) {
+    hasUpiOrCrypto = true;
+    findings.push({ id: `rule-personal-transfer-${findings.length}`, category: "payment", severity: "critical", quote: transferMatch[0], explanation: { en: "Requests a transfer to a bank or personal account rather than a verifiable official payment channel.", ta: "அதிகாரப்பூர்வ கட்டண வழிக்கு பதிலாக வங்கி அல்லது தனிப்பட்ட கணக்கிற்கு பணம் அனுப்பக் கோருகிறது.", hi: "आधिकारिक भुगतान माध्यम के बजाय बैंक या निजी खाते में धन भेजने को कहता है।" } });
+  }
+
   // 3. URLs and Domains (supports multi-level subdomains like eportal.incometax.gov.in)
   const urlRegex = /(?:https?:\/\/)?((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?:\/[^\s,)]*)?)/gi;
   let urlMatch: RegExpExecArray | null;
@@ -218,6 +236,12 @@ export function evaluateSignals(text: string, referenceDate: Date = new Date()):
     }
 
     const domainAuth = checkDomainAuthenticity(rawDomain);
+    const brandKeywords = ["sbi", "hdfc", "icici", "axis", "pnb", "incometax", "parivahan", "echallan", "customs", "indiapost", "police"];
+    const namesBrand = brandKeywords.some((brand) => rawDomain.includes(brand));
+    if (namesBrand && !domainAuth.isExactOfficial && !domainAuth.isLookalike) {
+      hasLookalikeDomain = true;
+      findings.push({ id: `rule-brand-domain-${findings.length}`, category: "domain", severity: "critical", quote: fullMatch, explanation: { en: `The domain contains an official bank or department name but is not on the known official-domain allowlist (${rawDomain}).`, ta: `அதிகாரப்பூர்வ வங்கி அல்லது துறை பெயர் உள்ள இந்த இணையதளம் அங்கீகரிக்கப்பட்ட பட்டியலில் இல்லை.`, hi: `डोमेन में आधिकारिक बैंक या विभाग का नाम है, लेकिन यह सत्यापित डोमेन सूची में नहीं है।` } });
+    }
 
     if (domainAuth.isExactOfficial) {
       hasValidGovDomain = true;
@@ -325,7 +349,14 @@ export function evaluateSignals(text: string, referenceDate: Date = new Date()):
     hasSenderMismatch,
     hasValidGovDomain,
     isGovNoticeClaim,
+    hasCoercionOrPaymentDemand: hasUrgencyThreat || hasUpiOrCrypto || findings.some((finding) => finding.severity === "critical" && (finding.category === "threat" || finding.category === "payment" || finding.category === "sender")),
   };
+}
+
+function isPaymentDemandContext(text: string, index: number): boolean {
+  const context = text.slice(Math.max(0, index - 100), Math.min(text.length, index + 100));
+  if (/\b(?:never|do not|don't|dont|avoid|warning|security notice)\b/i.test(context) && !/\b(?:pay|payment|transfer|send|deposit|remit)\b/i.test(context)) return false;
+  return /\b(?:pay|payment|transfer|send|deposit|remit|settle|beneficiary|authorized|authori[sz]ed)\b/i.test(context);
 }
 
 /**

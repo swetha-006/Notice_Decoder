@@ -7,7 +7,8 @@ import { Language } from "./LanguageSwitcher";
 
 interface VerdictCardProps {
   verdict: Verdict;
-  confidenceScore: number;
+  confidenceLevel: "high" | "medium" | "low";
+  verifyBeforeActing?: boolean;
   urgencyLevel: Urgency;
   oneSentenceReason: { en: string; ta: string; hi: string };
   daysRemaining?: number;
@@ -17,7 +18,8 @@ interface VerdictCardProps {
 
 export function VerdictCard({
   verdict,
-  confidenceScore,
+  confidenceLevel,
+  verifyBeforeActing = false,
   urgencyLevel,
   oneSentenceReason,
   daysRemaining,
@@ -119,7 +121,7 @@ export function VerdictCard({
                 {localizedTitle}
               </h2>
               <span className="rounded bg-canvas-card px-2 py-0.5 text-xs font-mono font-semibold text-ink border border-border">
-                {confidenceScore}% Confidence
+                {confidenceLevel[0].toUpperCase() + confidenceLevel.slice(1)} Confidence
               </span>
             </div>
             <p className="mt-0.5 text-xs uppercase tracking-wider font-semibold text-ink-muted">
@@ -155,6 +157,8 @@ export function VerdictCard({
           )}
         </div>
       </div>
+
+      {verifyBeforeActing && <p className="mt-3 font-semibold text-suspicious-text">Verify before acting — the signals do not fully agree.</p>}
 
       {/* One-Sentence Reason */}
       <div className="mt-4 rounded-md border border-border-subtle bg-canvas-card p-4">

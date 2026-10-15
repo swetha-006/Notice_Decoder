@@ -113,13 +113,16 @@ export function groundModelFlags(
     severity: "critical" | "warning" | "info" | "positive";
     explanation: { en: string; ta: string; hi: string };
   }>,
-  fullText: string
+  fullText: string,
+  tokenMap: Record<string, string> = {}
 ): GroundedFlag[] {
   const verifiedFlags: GroundedFlag[] = [];
 
   for (let i = 0; i < modelFlags.length; i++) {
     const flag = modelFlags[i];
-    const match = findVerbatimQuote(fullText, flag.quote);
+    // Model sees masked text; restore tokens locally before grounding against original text.
+    const restoredQuote = flag.quote.replace(/\[(?:PERSON|PAN|PHONE|ACCOUNT|IFSC|AADHAAR|ADDRESS|PIN|EMAIL|VEHICLE|ID)_[0-9]+\]/g, (token) => tokenMap[token] ?? token);
+    const match = findVerbatimQuote(fullText, restoredQuote);
 
     if (match.found) {
       verifiedFlags.push({

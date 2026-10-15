@@ -17,7 +17,7 @@ import { evaluateSignals } from "@/lib/signals";
 import { groundModelFlags, mergeAndDeDuplicateFlags, GroundedFlag } from "@/lib/grounding";
 import { calculateVerdict, ScoringResult } from "@/lib/scoring";
 import { AnalysisResponse } from "@/lib/schema";
-import { ArrowLeft, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
+import { ArrowLeft, RefreshCw, ShieldAlert } from "lucide-react";
 
 export default function Home() {
   const [currentStep, setCurrentStep] = useState<"input" | "redaction" | "result">("input");
@@ -31,7 +31,7 @@ export default function Home() {
   // Analysis Result State
   const [groundedFlags, setGroundedFlags] = useState<GroundedFlag[]>([]);
   const [scoringResult, setScoringResult] = useState<ScoringResult | null>(null);
-  const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
+  const [analysisResponse, setAnalysisResponse] = useState<(AnalysisResponse & { source: "model" | "rules_only" }) | null>(null);
   const [daysRemaining, setDaysRemaining] = useState<number | undefined>();
   const [isExpired, setIsExpired] = useState<boolean | undefined>();
 
@@ -86,11 +86,11 @@ export default function Home() {
         throw new Error(errorData.error || `Server responded with status ${res.status}`);
       }
 
-      const modelData: AnalysisResponse = await res.json();
+      const modelData: AnalysisResponse & { source: "model" | "rules_only" } = await res.json();
       setAnalysisResponse(modelData);
 
       // 3. Ground model flags: discard any flag whose quote cannot be found verbatim
-      const verifiedModelFlags = groundModelFlags(modelData.flags, noticeText);
+      const verifiedModelFlags = groundModelFlags(modelData.flags, noticeText, redactionResult.tokenMap);
 
       // 4. Merge rule findings with verified model flags & de-duplicate ranges
       const merged = mergeAndDeDuplicateFlags(
@@ -204,10 +204,17 @@ export default function Home() {
               </div>
             </div>
 
+            {analysisResponse.source === "rules_only" && (
+              <div role="status" className="rounded-md border border-amber-400 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+                Rule-based check only - AI analysis unavailable. Verify through an official channel before acting.
+              </div>
+            )}
+
             {/* Verdict Card */}
             <VerdictCard
               verdict={scoringResult.verdict}
-              confidenceScore={scoringResult.confidenceScore}
+              confidenceLevel={scoringResult.confidenceLevel}
+              verifyBeforeActing={scoringResult.verifyBeforeActing}
               urgencyLevel={scoringResult.urgencyLevel}
               oneSentenceReason={scoringResult.oneSentenceReason}
               daysRemaining={daysRemaining}
@@ -228,21 +235,30 @@ export default function Home() {
 
               {/* Right Column: Plain Summary, Checklist, and Drafted Reply (7 cols) */}
               <div className="lg:col-span-7 space-y-6">
-                <SummarySection
-                  summary={analysisResponse.summary}
-                  currentLang={currentLang}
-                />
+                {analysisResponse.source === "model" ? (
+                  <SummarySection summary={analysisResponse.summary} currentLang={currentLang} />
+                ) : (
+                  <section className="rounded-lg border border-border bg-canvas-card p-5">
+                    <h2 className="font-serif text-lg font-semibold">General guidance</h2>
+                    <p className="mt-2 text-sm">Do not use links or contact details in the notice. Find the official website independently and verify the reference with the issuing organization.</p>
+                  </section>
+                )}
+
+                <section className="rounded-lg border border-border bg-canvas-card p-5" aria-labelledby="why-verdict-title">
+                  <h2 id="why-verdict-title" className="font-serif text-lg font-semibold">Why this verdict</h2>
+                  <ul className="mt-3 space-y-2 text-sm">
+                    {scoringResult.breakdown.length ? scoringResult.breakdown.map((item, index) => <li key={`${item.factor}-${index}`} className="flex justify-between gap-3"><span>{item.factor}</span><span className="shrink-0 font-mono">{item.points > 0 ? "+" : ""}{item.points}</span></li>) : <li>No strong rule signals were detected. Verify independently before acting.</li>}
+                  </ul>
+                </section>
 
                 <ChecklistSection
                   items={analysisResponse.checklist}
                   currentLang={currentLang}
                 />
 
-                <ResponseDraft
-                  draftReply={analysisResponse.draftReply}
-                  tokenMap={redactionResult.tokenMap}
-                  currentLang={currentLang}
-                />
+                {analysisResponse.source === "model" && (
+                  <ResponseDraft draftReply={analysisResponse.draftReply} tokenMap={redactionResult.tokenMap} currentLang={currentLang} />
+                )}
               </div>
             </div>
           </div>
